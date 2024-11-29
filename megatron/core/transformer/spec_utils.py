@@ -4,7 +4,7 @@ import types
 from dataclasses import dataclass, field
 from typing import Tuple, Union
 
-import torch
+from ... import torch
 
 
 @dataclass

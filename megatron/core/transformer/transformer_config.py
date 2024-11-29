@@ -4,8 +4,8 @@ import types
 from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
-import torch
-import torch.nn.functional as F
+from ... import torch
+from ...torch.nn import functional as F
 
 from ..model_parallel_config import ModelParallelConfig
 from ..utils import init_method_normal, scaled_init_method_normal

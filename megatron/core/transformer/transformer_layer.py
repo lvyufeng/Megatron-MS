@@ -4,7 +4,7 @@ from abc import ABC
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Union
 
-import torch
+from ... import torch
 
 from megatron.core import parallel_state
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
@@ -14,7 +14,7 @@ from megatron.core.transformer.identity_op import IdentityFuncOp, IdentityOp
 from megatron.core.transformer.module import MegatronModule
 from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.utils import make_viewless_tensor
+# from megatron.core.utils import make_viewless_tensor
 
 
 @dataclass
@@ -236,9 +236,10 @@ class TransformerLayer(MegatronModule, BaseTransformerLayer):
         # won't result in memory savings (like the data loader, or
         # p2p_communication), it serves to document the origin of this
         # 'view' tensor.
-        output = make_viewless_tensor(
-            inp=hidden_states, requires_grad=hidden_states.requires_grad, keep_graph=True
-        )
+        # output = make_viewless_tensor(
+        #     inp=hidden_states, requires_grad=hidden_states.requires_grad, keep_graph=True
+        # )
+        output = hidden_states
 
         return output, context
 

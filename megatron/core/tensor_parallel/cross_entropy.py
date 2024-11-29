@@ -1,6 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
-import torch
+from ... import torch
 
 from megatron.core.parallel_state import (
     get_tensor_model_parallel_group,
@@ -12,8 +12,8 @@ from .utils import VocabUtility
 
 
 class _VocabParallelCrossEntropy(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, vocab_parallel_logits, target, label_smoothing=0.0):
+
+    def forward(self, vocab_parallel_logits, target, label_smoothing=0.0):
 
         # Maximum value along vocab dimension across all GPUs.
         logits_max = torch.max(vocab_parallel_logits, dim=-1)[0]
@@ -87,19 +87,18 @@ class _VocabParallelCrossEntropy(torch.autograd.Function):
             mean_log_probs = log_probs.mean(dim=-1)
             loss = (1.0 - smoothing) * loss - smoothing * mean_log_probs
 
-        ctx.label_smoothing, ctx.vocab_size = label_smoothing, vocab_size
+        self.label_smoothing, self.vocab_size = label_smoothing, vocab_size
 
         # Store softmax, target-mask and masked-target for backward pass.
-        ctx.save_for_backward(exp_logits, target_mask, masked_target_1d)
+        self.save_for_backward(exp_logits, target_mask, masked_target_1d)
 
         return loss
 
-    @staticmethod
-    def backward(ctx, grad_output):
+    def backward(self, grad_output):
 
         # Retreive tensors from the forward path.
-        softmax, target_mask, masked_target_1d = ctx.saved_tensors
-        label_smoothing, vocab_size = ctx.label_smoothing, ctx.vocab_size
+        softmax, target_mask, masked_target_1d = self.saved_tensors
+        label_smoothing, vocab_size = self.label_smoothing, self.vocab_size
 
         # All the inputs have softmax as thier gradient.
         grad_input = softmax

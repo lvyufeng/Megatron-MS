@@ -1,5 +1,5 @@
 # Copyright (c) 2023, NVIDIA CORPORATION. All rights reserved.
-import torch
+from ... import torch
 
 
 class IdentityOp(torch.nn.Module):

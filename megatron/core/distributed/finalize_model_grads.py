@@ -2,8 +2,8 @@
 
 from typing import List
 
-import torch
-from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+from ... import torch
+from ...torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 from .. import parallel_state
 from ..transformer.transformer_config import TransformerConfig

@@ -1,6 +1,6 @@
 # Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
-import torch
+from ... import torch
 
 from megatron.core.parallel_state import (
     get_tensor_model_parallel_group,

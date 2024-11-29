@@ -6,7 +6,7 @@ from enum import Enum
 from logging import getLogger
 from typing import Dict, List, Optional
 
-import torch
+from ... import torch
 
 from .. import parallel_state
 

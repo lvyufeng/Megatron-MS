@@ -5,7 +5,7 @@ from functools import lru_cache
 from operator import itemgetter
 from typing import Any, Dict, Iterable, Iterator, Optional, Tuple, Union
 
-import torch
+from ... import torch
 
 from megatron.core import parallel_state
 from megatron.core.dist_checkpointing.mapping import ShardedObject, ShardedStateDict, StateDict

@@ -6,7 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import List
 
-import torch
+from .. import torch
 
 
 class TimerBase(ABC):

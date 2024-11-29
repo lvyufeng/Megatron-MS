@@ -7,7 +7,7 @@ import warnings
 from datetime import timedelta
 from typing import Optional
 
-import torch
+from .. import torch
 
 from .utils import GlobalMemoryBuffer
 
@@ -254,6 +254,7 @@ def initialize_model_parallel(
         _PIPELINE_MODEL_PARALLEL_SPLIT_RANK = pipeline_model_parallel_split_rank
 
     rank = torch.distributed.get_rank()
+    print(rank)
 
     nccl_comm_cfgs = {}
     if nccl_communicator_config_path is not None:
@@ -282,17 +283,19 @@ def initialize_model_parallel(
     for i in range(pipeline_model_parallel_size):
         start_rank = i * num_pipeline_model_parallel_groups
         end_rank = (i + 1) * num_pipeline_model_parallel_groups
+        print(start_rank, end_rank)
         for j in range(context_parallel_size * tensor_model_parallel_size):
             ranks = range(
                 start_rank + j, end_rank, context_parallel_size * tensor_model_parallel_size
             )
+            print(ranks, start_rank + j, end_rank, context_parallel_size * tensor_model_parallel_size)
             group = torch.distributed.new_group(
                 ranks, timeout=timeout, pg_options=get_nccl_options('dp', nccl_comm_cfgs)
             )
-            group_gloo = torch.distributed.new_group(ranks, timeout=timeout, backend="gloo")
+            # group_gloo = torch.distributed.new_group(ranks, timeout=timeout, backend="gloo")
             if rank in ranks:
                 _DATA_PARALLEL_GROUP = group
-                _DATA_PARALLEL_GROUP_GLOO = group_gloo
+                # _DATA_PARALLEL_GROUP_GLOO = group_gloo
                 _DATA_PARALLEL_GLOBAL_RANKS = ranks
         for j in range(tensor_model_parallel_size):
             ranks_with_cp = range(start_rank + j, end_rank, tensor_model_parallel_size)
@@ -300,12 +303,12 @@ def initialize_model_parallel(
             group_with_cp = torch.distributed.new_group(
                 ranks_with_cp, timeout=timeout, pg_options=get_nccl_options('dp_cp', nccl_comm_cfgs)
             )
-            group_with_cp_gloo = torch.distributed.new_group(
-                ranks_with_cp, timeout=timeout, backend="gloo"
-            )
+            # group_with_cp_gloo = torch.distributed.new_group(
+            #     ranks_with_cp, timeout=timeout, backend="gloo"
+            # )
             if rank in ranks_with_cp:
                 _DATA_PARALLEL_GROUP_WITH_CP = group_with_cp
-                _DATA_PARALLEL_GROUP_WITH_CP_GLOO = group_with_cp_gloo
+                # _DATA_PARALLEL_GROUP_WITH_CP_GLOO = group_with_cp_gloo
                 _DATA_PARALLEL_GLOBAL_RANKS_WITH_CP = ranks_with_cp
 
     # Apply SHARP to DP process groups
@@ -514,10 +517,10 @@ def initialize_model_parallel(
             group = torch.distributed.new_group(
                 ranks, timeout=timeout, pg_options=get_nccl_options('dp_modulo_exp', nccl_comm_cfgs)
             )
-            group_gloo = torch.distributed.new_group(ranks, backend="gloo")
+            # group_gloo = torch.distributed.new_group(ranks, backend="gloo")
             if rank in ranks:
                 _DATA_MODULO_EXPERT_PARALLEL_GROUP = group
-                _DATA_MODULO_EXPERT_PARALLEL_GROUP_GLOO = group_gloo
+                # _DATA_MODULO_EXPERT_PARALLEL_GROUP_GLOO = group_gloo
 
     # Initialize global memory buffer
     # This isn't really "parallel state" but there isn't another good place to

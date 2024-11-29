@@ -5,11 +5,7 @@
 
 import contextlib
 
-import torch
-from torch import _C
-from torch.cuda import _lazy_call
-from torch.cuda import device as device_ctx_manager
-from torch.utils.checkpoint import detach_variable
+from ... import torch
 
 from megatron.core.parallel_state import (
     get_data_parallel_rank,
@@ -18,7 +14,6 @@ from megatron.core.parallel_state import (
     get_tensor_model_parallel_rank,
     get_tensor_model_parallel_world_size,
 )
-from megatron.core.utils import safely_set_viewless_tensor_data
 
 from .utils import gather_split_1d_tensor, split_tensor_into_1d_equal_chunks
 
@@ -37,29 +32,31 @@ def _set_cuda_rng_state(new_state, device=-1):
     with a single change: the input state is not cloned. Cloning caused
     major performance issues for +4 GPU cases.
     """
-    if hasattr(_C, '_cuda_setRNGState') and callable(_C._cuda_setRNGState):
-        # older PyTorch
-        def cb():
-            with device_ctx_manager(device):
-                _C._cuda_setRNGState(new_state)
+    # if hasattr(_C, '_cuda_setRNGState') and callable(_C._cuda_setRNGState):
+    #     # older PyTorch
+    #     def cb():
+    #         with device_ctx_manager(device):
+    #             _C._cuda_setRNGState(new_state)
 
-    else:
-        # newer PyTorch
-        if device == -1:
-            device = torch.device('cuda')
-        elif isinstance(device, str):
-            device = torch.device(device)
-        elif isinstance(device, int):
-            device = torch.device('cuda', device)
+    # else:
+    # newer PyTorch
+        # if device == -1:
+        #     device = torch.device('cuda')
+        # elif isinstance(device, str):
+        #     device = torch.device(device)
+        # elif isinstance(device, int):
+        #     device = torch.device('cuda', device)
 
-        def cb():
-            idx = device.index
-            if idx is None:
-                idx = torch.cuda.current_device()
-            default_generator = torch.cuda.default_generators[idx]
-            default_generator.set_state(new_state)
+        # def cb():
+        #     idx = device.index
+        #     if idx is None:
+        #         idx = torch.cuda.current_device()
+        #     default_generator = torch.cuda.default_generators[idx]
+        #     default_generator.set_state(new_state)
 
-    _lazy_call(cb)
+        # # _lazy_call(cb)
+        # pass
+    torch.cuda.set_rng_state(new_state)
 
 
 def get_expert_parallel_rng_tracker_name():
@@ -216,11 +213,11 @@ class CheckpointFunction(torch.autograd.Function):
         # Divide hidden states across model parallel group and only keep
         # the chunk corresponding to the current rank.
         if distribute_saved_activations:
-            ctx.input_0_shape = args[0].data.shape
+            ctx.input_0_shape = args[0].data  .shape
             safely_set_viewless_tensor_data(
                 args[0], split_tensor_into_1d_equal_chunks(args[0].data, new_buffer=True)
             )
-
+ 
         # Store everything.
         ctx.save_for_backward(*args)
 
