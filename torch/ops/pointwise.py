@@ -180,10 +180,14 @@ def erfinv(input):
     return ops.erfinv(input)
 
 # exp
-def exp(input):
+def exp(input, out=None):
     if use_pyboost():
-        return mindspore.mint.exp(input)
-    return ops.exp(input)
+        output = mindspore.mint.exp(input)
+    output = ops.exp(input)
+    if out is not None:
+        out.assign_value(output)
+    else:
+        return out
 
 # exp2
 def exp2(input):
@@ -464,3 +468,5 @@ def trunc(input):
 # xlogy
 def xlogy(input, other):
     return ops.xlogy(input, other)
+
+__all__ = ['abs', 'absolute', 'acos', 'acosh', 'add', 'addcdiv', 'addcmul', 'angle', 'arccosh', 'arcsin', 'arcsinh', 'arctan', 'arctan2', 'arctanh', 'arrcos', 'asin', 'asinh', 'atan', 'atan2', 'atanh', 'bitwise_and', 'bitwise_left_shift', 'bitwise_or', 'bitwise_right_shift', 'bitwise_xor', 'ceil', 'clamp', 'clip', 'cos', 'cosh', 'deg2rad', 'digamma', 'div', 'divide', 'erf', 'erfc', 'erfinv', 'exp', 'exp2', 'expm1', 'float_power', 'floor', 'floor_divide', 'fmod', 'frac', 'hypot', 'igamma', 'igammac', 'imag', 'lerp', 'lgamma', 'log', 'log1p', 'log2', 'logical_and', 'logical_not', 'logical_or', 'logical_xor', 'logit', 'mul', 'multiply', 'mvlgamma', 'nan_to_num', 'neg', 'negative', 'nextafter', 'polygamma', 'positive', 'pow', 'rad2deg', 'real', 'reciprocal', 'remainder', 'round', 'rsqrt', 'sigmoid', 'sign', 'sin', 'sinc', 'sinh', 'softmax', 'sqrt', 'square', 'sub', 'subtract', 'tan', 'tanh', 'true_divide', 'trunc', 'xlogy']

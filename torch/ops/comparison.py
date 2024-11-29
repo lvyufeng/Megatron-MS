@@ -20,7 +20,8 @@ def eq(input, other):
 
 # equal
 def equal(input, other):
-    return eq(input, other)
+    out = eq(input, other)
+    return out.all()
 
 # ge
 def ge(input, other):
@@ -144,3 +145,35 @@ def topk(input, k, dim=-1, largest=True, sorted=True):
 # msort
 def msort(input):
     return sort(input, dim=0)
+
+__all__ = [
+    'allclose',
+    'argsort',
+    'eq',
+    'equal',
+    'ge',
+    'gt',
+    'greater',
+    'isclose',
+    'isfinite',
+    'isin',
+    'isinf',
+    # isposinf,
+    # isneginf,
+    'isnan',
+    # isreal,
+    # kthvalue,
+    'le',
+    'less_equal',
+    'lt',
+    'less',
+    'maximum',
+    'minimum',
+    'fmax',
+    'fmin',
+    'ne',
+    'not_equal',
+    'sort',
+    'topk',
+    'msort',
+]

@@ -7,7 +7,7 @@ from collections import abc, defaultdict
 from enum import Enum
 from typing import Any, cast, Dict, Iterable, List, Optional, overload, Tuple, Union
 
-from ... import torch
+import torch
 
 
 __all__ = ["OptState", "GradScaler"]

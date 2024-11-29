@@ -71,7 +71,7 @@ def ones_like(input, *, dtype=None):
     return ops.ones_like(input, dtype=dtype)
 
 # arange
-def arange(start=0, end=None, step=1, *, dtype=None):
+def arange(start=0, end=None, step=1, *, dtype=None, device=None):
     if ON_ORANGE_PI and dtype in (None, mindspore.int64):
         dtype = mindspore.int32
     if use_pyboost():
@@ -82,7 +82,7 @@ def arange(start=0, end=None, step=1, *, dtype=None):
 def range(start=0, end=None, step=1, dtype=None):
     if end is None:
         start, end = 0, start
-    out = ops.range(start, end, step)
+    out = ops.range(start, end+1, step)
     if dtype is not None:
         out = out.to(dtype)
     return out
@@ -153,3 +153,5 @@ def polar(abs, angle):
 # heaviside
 def heaviside(input, values):
     return ops.heaviside(input, values)
+
+__all__ = ['arange', 'as_strided', 'complex', 'empty', 'eye', 'from_numpy', 'full', 'full_like', 'heaviside', 'linspace', 'logspace', 'ones', 'ones_like', 'polar', 'range', 'zeros', 'zeros_like']

@@ -13,3 +13,5 @@ def numel(input):
 
 def as_tensor(data, dtype=None):
     return mindspore.Tensor(data, dtype)
+
+__all__ = ['as_tensor', 'is_floating_point', 'is_tensor', 'numel']

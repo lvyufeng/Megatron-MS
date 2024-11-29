@@ -5,7 +5,7 @@ import math
 import operator
 from functools import reduce
 
-from .. import torch
+import torch
 
 from megatron.core import parallel_state
 from megatron.core.dist_checkpointing.mapping import ShardedTensor

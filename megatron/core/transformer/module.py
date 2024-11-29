@@ -3,8 +3,8 @@
 """Megatron Module."""
 from typing import Optional, Tuple
 
-from ... import torch
-from ...torch.nn.parameter import Parameter
+import torch
+from torch.nn.parameter import Parameter
 
 from megatron.core import parallel_state
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict

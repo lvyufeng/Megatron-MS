@@ -5,7 +5,7 @@
 
 import contextlib
 
-from ... import torch
+import torch
 
 from megatron.core.parallel_state import (
     get_data_parallel_rank,

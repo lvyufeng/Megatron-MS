@@ -2,7 +2,7 @@
 
 from typing import List, Sequence
 
-from ... import torch
+import torch
 
 from megatron.core import parallel_state
 from megatron.core.utils import divide

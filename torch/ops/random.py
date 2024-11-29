@@ -105,3 +105,5 @@ def gamma(shape, alpha, beta):
     if DEVICE_TARGET != 'Ascend':
         return mindspore.tensor(np.random.gamma(alpha, 1/beta, shape))
     return ops.gamma(shape, alpha, beta)
+
+__all__ = ['bernoulli', 'gamma', 'multinomial', 'normal', 'rand', 'rand_like', 'randint', 'randn', 'randn_like', 'randperm', 'ranint_like']

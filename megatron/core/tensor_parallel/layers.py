@@ -9,11 +9,11 @@ import os
 import warnings
 from typing import Any, Callable, List, Optional, Tuple
 
-from ... import torch
-from ...torch.nn import functional as F
-from ...torch.nn import init
-from ...torch.amp import custom_bwd, custom_fwd
-from ...torch.nn.parameter import Parameter
+import torch
+from torch.nn import functional as F
+from torch.nn import init
+from torch.amp import custom_bwd, custom_fwd
+from torch.nn.parameter import Parameter
 
 from megatron.core.model_parallel_config import ModelParallelConfig
 from megatron.core.parallel_state import (

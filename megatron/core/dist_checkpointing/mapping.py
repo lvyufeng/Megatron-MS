@@ -13,7 +13,7 @@ from itertools import chain
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
-from ... import torch
+import torch
 
 from .core import CheckpointingException
 from .dict_utils import dict_list_map_inplace, dict_list_map_outplace

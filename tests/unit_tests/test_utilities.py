@@ -1,5 +1,5 @@
 import os
-from megatron import torch
+import torch
 import megatron.core.parallel_state as ps
 
 class Utils:

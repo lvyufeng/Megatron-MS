@@ -9,7 +9,7 @@ Other objects (e.g. tuples) are treated as atomic leaf types that cannot be trav
 from collections import defaultdict
 from typing import Any, Callable, Iterable, Optional, Tuple, Union
 
-from ... import torch
+import torch
 
 
 def extract_matching_values(

@@ -1,7 +1,10 @@
 from mindspore.communication import GlobalComm, get_group_size as get_world_size, get_rank, create_group
 from mindspore.mint.distributed import init_process_group, destroy_process_group
-from mindspore.communication.comm_func import barrier
+from mindspore.communication.comm_func import barrier, all_reduce as all_reduce_
 from mindspore.communication._comm_helper import _ExistingGroup, _HCCL_TEST_AVAILABLE
+from mindspore.ops import ReduceOp, assign
+
+import torch
 
 _HCCL_TEST_AVAILABLE = True
 
@@ -10,10 +13,24 @@ ProcessGroup = str
 def is_initialized():
     return GlobalComm.INITED
 
+_group_count = 0
+NON_GROUP_MEMBER = -100
+
+def _process_group_name(ranks):
+    global _group_count
+    pg_name = str(_group_count)
+    _group_count += 1
+    return pg_name
+
 def new_group(ranks=None, timeout=None, backend=None, pg_options=None, use_local_synchronization=False, group_desc=None):
-    group = str(len(_ExistingGroup.ITEMS))
-    create_group(group, list(ranks))
-    return group
+    pg_name = _process_group_name(ranks)
+    ranks = list(ranks)
+    if pg_name in _ExistingGroup.ITEMS:
+        raise ValueError(f'{pg_name} already exist.')
+    if get_rank() not in ranks:
+        return NON_GROUP_MEMBER
+    create_group(pg_name, ranks)
+    return pg_name
 
 class Backend:
     class Options:
@@ -80,3 +97,9 @@ class ProcessGroupNCCL(Backend):
     def uid(self) -> int: ...
     @property
     def options(self) -> Options: ...  # type: ignore[override]
+
+def all_reduce(tensor, op=ReduceOp.SUM, group=GlobalComm.WORLD_COMM_GROUP, async_op=False):
+    if tensor.dtype == torch.int64:
+        tensor = tensor.to(torch.int32)
+    new_tensor, handle = all_reduce_(tensor, op, group, async_op)
+    return new_tensor, handle

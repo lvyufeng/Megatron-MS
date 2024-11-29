@@ -121,3 +121,46 @@ def outer(input, vec2):
 
 
 # vdot
+
+__all__ = [
+    'addbmm',
+    'addmm',
+    # addmv
+    # addr
+    'baddbmm',
+    'bmm',
+    # chain_matmul
+    # cholesky
+    # cholesky_inverse
+    # cholesky_solve
+    'dot',
+    # geqrf
+    # ger
+    # inner
+    # inverse
+    # det
+    # logdet
+    # slogdet
+    # lu
+    # lu_solve
+    # lu_unpack
+    'matmul',
+    # matrix_power
+    # matrix_exp
+    'mm',
+    # mv
+    # orgqr
+    # ormqr
+    'outer',
+    # pinverse
+    # qr
+    # svd
+    # svd_lowrank
+    # pca_lowrank
+    # lobpcg
+    # trapz
+    # trapezoid
+    # cumulative_trapezoid
+    # triangular_solve
+    # vdot
+]

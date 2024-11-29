@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 from typing import Dict, Optional
 
-from ... import torch
+import torch
 
 from .. import parallel_state
 from ..transformer.module import MegatronModule

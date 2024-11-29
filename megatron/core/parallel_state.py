@@ -7,7 +7,7 @@ import warnings
 from datetime import timedelta
 from typing import Optional
 
-from .. import torch
+import torch
 
 from .utils import GlobalMemoryBuffer
 
@@ -283,12 +283,10 @@ def initialize_model_parallel(
     for i in range(pipeline_model_parallel_size):
         start_rank = i * num_pipeline_model_parallel_groups
         end_rank = (i + 1) * num_pipeline_model_parallel_groups
-        print(start_rank, end_rank)
         for j in range(context_parallel_size * tensor_model_parallel_size):
             ranks = range(
                 start_rank + j, end_rank, context_parallel_size * tensor_model_parallel_size
             )
-            print(ranks, start_rank + j, end_rank, context_parallel_size * tensor_model_parallel_size)
             group = torch.distributed.new_group(
                 ranks, timeout=timeout, pg_options=get_nccl_options('dp', nccl_comm_cfgs)
             )

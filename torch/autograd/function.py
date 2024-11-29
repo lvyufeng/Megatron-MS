@@ -83,3 +83,7 @@ class Function(nn.Cell):
 
     def bprop(self, *args, **kwargs):
         return self.backward(*args, **kwargs)
+
+    @classmethod
+    def apply(cls, *args, **kwargs):
+        return cls()(*args, **kwargs)

@@ -1,4 +1,4 @@
-from megatron import torch
+import torch
 from megatron.core.tensor_parallel.cross_entropy import vocab_parallel_cross_entropy
 from tests.unit_tests.test_utilities import Utils
 import numpy as np
@@ -10,5 +10,6 @@ def test_vocab_parallel_cross_entropy():
     output = vocab_parallel_cross_entropy(vocab_parallel_logits, target)
     expected_output = torch.tensor([10.2309,  8.2309,  6.2309,  4.2309, 10.2309,  8.2309,  6.2309,  4.2309,
         10.2309,  8.2309,  6.2309,  4.2309, 10.2309,  8.2309,  6.2309,  4.2309]).cuda()
+    print(output, expected_output)
     assert(torch.equal(torch.round(expected_output), torch.round(output)))
     Utils.destroy_model_parallel()

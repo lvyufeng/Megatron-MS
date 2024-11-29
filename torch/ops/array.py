@@ -9,7 +9,6 @@ from mindspore.ops.operations._grad_ops import StridedSliceGrad
 from mindnlp.configs import use_pyboost, ON_ORANGE_PI
 from .other import broadcast_tensors
 
-
 # adjoint
 
 # argwhere
@@ -613,3 +612,71 @@ def strided_slice_update(input, begin, end, strides, update, begin_mask=0, end_m
     strided_slice_grad = _get_cache_prim(StridedSliceGrad)(begin_mask, end_mask, ellipsis_mask, new_axis_mask, shrink_axis_mask)
     updated_tensor = strided_slice_grad(update, input.shape, begin, end, strides)
     return ops.assign(input, where(updated_tensor != 0, updated_tensor, input))
+
+__all__ = [
+    # adjoint,
+    'argwhere',
+    'cat',
+    'concat',
+    'concatenate',
+    'conj',
+    'chunk',
+    # dsplit,
+    # column_stack
+    # dstack
+    'gather',
+    'gather_nd',
+    'tf_gather',
+    # hsplit
+    'hstack',
+    'index_fill',
+    'index_add',
+    'inplace_index_add',
+    # index_copy
+    # index_reduce
+    'index_select',
+    'masked_select',
+    # movedim
+    # moveaxis
+    'narrow',
+    # narrow_copy
+    'nonzero',
+    'permute',
+    'reshape',
+    'view',
+    # row_stack
+    'select',
+    'scatter',
+    'tf_scatter_nd_update',
+    'tf_scatter_nd',
+    # diagonal_scatter
+    # select_scatter
+    # slice_scatter
+    'scatter_add',
+    # scatter_reduce
+    'scatter_nd_update',
+    'scatter_update',
+    'split',
+    'squeeze',
+    'stack',
+    'swapaxes',
+    'swapdims',
+    'take',
+    # take_along_dim
+    # tensor_split
+    'tile',
+    'transpose',
+    'unbind',
+    # unravel_index
+    'unsqueeze',
+    # vsplit
+    'vstack',
+    'where',
+    'cumprod',
+    'getitem',
+    'setitem',
+    'tensor_scatter_add',
+    'tensor_scatter_max',
+    'tensor_scatter_min',
+    'strided_slice_update'
+]

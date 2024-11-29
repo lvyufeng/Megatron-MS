@@ -13,10 +13,12 @@
 # limitations under the License.
 # ============================================================================
 """core module"""
-from mindspore import Tensor
+from torch import _tensor
 from mindspore import jit
 from mindspore.common.dtype import *
 from mindspore.common.dtype import tensor_type as dtype
+from mindspore import Tensor
+
 from . import optim, ops, nn, distributions, cuda, distributed
 from .utils import get_default_dtype, set_default_dtype, manual_seed
 from .autograd import no_grad, enable_grad, value_and_grad
@@ -31,3 +33,10 @@ HalfTensor = Tensor
 BFloat16Tensor = Tensor
 
 Size = tuple
+
+long = int64
+int = int32
+float = float32
+
+def tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=False):
+    return Tensor(data, dtype, device=device)

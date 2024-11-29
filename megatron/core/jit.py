@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION. All rights reserved.
 
-from .. import torch
+import torch
 
 # TORCH_MAJOR = int(torch.__version__.split(".")[0])
 # TORCH_MINOR = int(torch.__version__.split(".")[1])

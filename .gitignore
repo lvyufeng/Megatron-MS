@@ -8,3 +8,7 @@ slurm*
 logs
 .vscode
 *.log
+aclinit.json
+fusion_result.json
+kernel_meta/
+extra-info/

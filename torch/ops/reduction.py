@@ -167,3 +167,6 @@ def count_nonzero(input, dim=None):
     if dim is None:
         dim = ()
     return ops.count_nonzero(input, dim)
+
+__all__ = ['all', 'amax', 'amin', 'aminmax', 'any', 'argmax', 'argmin', 'count_nonzero', 'logsumexp', 'max', 'mean', 'median', 'min', 'nanmedian', 'nanquantile', 'nansum', 'norm', 'prod', 'quantile', 'std', 'std_mean', 'sum', 'unique', 'unique_consecutive', 'var', 'var_mean']
+ 

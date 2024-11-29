@@ -40,3 +40,5 @@ def raw_adam_amsgrad(param, exp_avg, exp_avg_sq, max_exp_avg_sq, beta1_power, be
 def raw_sgd(param, grad, lr, dampening, weight_decay, nesterov, accum, momentum, stat):
     _sgd = _get_cache_prim(ops.SGD)(dampening, weight_decay, nesterov)
     return _sgd(param, grad, lr, accum, momentum, stat)
+
+__all__ = ['raw_adadelta', 'raw_adam', 'raw_adam_amsgrad', 'raw_sgd']

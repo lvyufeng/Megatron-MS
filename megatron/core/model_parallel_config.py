@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Callable, ContextManager, Optional
 
-from .. import torch
+import torch
 
 
 @dataclass

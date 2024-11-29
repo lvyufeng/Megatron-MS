@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Tuple, Union
 
 import numpy as np
-from ... import torch
+import torch
 
 from .core import CheckpointingConfig, maybe_load_config, save_config
 from .dict_utils import (
