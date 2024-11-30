@@ -106,7 +106,7 @@ def eye(n, m=None, *, dtype=None):
     return ops.eye(n, m, dtype)
 
 # empty
-def empty(*size, dtype=None):
+def empty(*size, dtype=None, device=None):
     if isinstance(size[0], (tuple, list)):
         size = size[0]
     if dtype is None:

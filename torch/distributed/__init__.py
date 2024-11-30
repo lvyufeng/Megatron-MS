@@ -1,6 +1,6 @@
 from mindspore.communication import GlobalComm, get_group_size as get_world_size, get_rank, create_group
 from mindspore.mint.distributed import init_process_group, destroy_process_group
-from mindspore.communication.comm_func import barrier, all_reduce as all_reduce_
+from mindspore.communication.comm_func import barrier, all_reduce as all_reduce_, broadcast as broadcast_
 from mindspore.communication._comm_helper import _ExistingGroup, _HCCL_TEST_AVAILABLE
 from mindspore.ops import ReduceOp, assign
 
@@ -103,3 +103,9 @@ def all_reduce(tensor, op=ReduceOp.SUM, group=GlobalComm.WORLD_COMM_GROUP, async
         tensor = tensor.to(torch.int32)
     new_tensor, handle = all_reduce_(tensor, op, group, async_op)
     return new_tensor, handle
+
+def broadcast(tensor, src=0, group=GlobalComm.WORLD_COMM_GROUP):
+    if tensor.dtype == torch.int64:
+        tensor = tensor.to(torch.int32)
+    new_tensor = broadcast_(tensor, src, group)
+    return new_tensor

@@ -37,7 +37,7 @@ def _build_key_size_numel_dictionaries(keys, data):
 
     # Move to GPU and broadcast.
     sizes_cuda = torch.tensor(sizes, dtype=torch.long, device='cuda')
-    torch.distributed.broadcast(
+    sizes_cuda = torch.distributed.broadcast(
         sizes_cuda, get_tensor_model_parallel_src_rank(), group=get_tensor_model_parallel_group()
     )
 
@@ -52,11 +52,11 @@ def _build_key_size_numel_dictionaries(keys, data):
         size = []
         numel = 1
         while sizes_cpu[offset + i] > 0:
-            this_size = sizes_cpu[offset + i]
+            this_size = sizes_cpu[offset + i].item()
             size.append(this_size)
             numel *= this_size
             i += 1
-        key_size[key] = size
+        key_size[key] = tuple(size)
         key_numel[key] = numel
         total_numel += numel
         offset += max_dim
@@ -88,7 +88,7 @@ def broadcast_data(keys, data, datatype):
         flatten_data = torch.empty(total_numel, device=torch.cuda.current_device(), dtype=datatype)
 
     # Broadcast
-    torch.distributed.broadcast(
+    flatten_data = torch.distributed.broadcast(
         flatten_data, get_tensor_model_parallel_src_rank(), group=get_tensor_model_parallel_group()
     )
 

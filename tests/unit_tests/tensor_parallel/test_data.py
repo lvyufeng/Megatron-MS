@@ -16,6 +16,7 @@ def test_broadcast_data():
         }
     dtype = torch.float32
     actual_output = broadcast_data([0,1],input_data, dtype)
+    print(actual_output)
     assert(torch.equal(actual_output[0], input_data[0]))
     assert(torch.equal(actual_output[1], input_data[1]))
     Utils.destroy_model_parallel()

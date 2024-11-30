@@ -39,4 +39,4 @@ int = int32
 float = float32
 
 def tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=False):
-    return Tensor(data, dtype, device=device)
+    return Tensor(data, dtype)

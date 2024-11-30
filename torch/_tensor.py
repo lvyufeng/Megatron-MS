@@ -9,11 +9,14 @@ def _repeat(self, *sizes):
 Tensor.repeat = _repeat
 StubTensor.repeat = _repeat
 
-def cuda(self):
+def no_action(self):
     return self
 
-Tensor.cuda = cuda
-StubTensor.cuda = cuda
+Tensor.cuda = no_action
+StubTensor.cuda = no_action
+Tensor.cpu = no_action
+StubTensor.cpu = no_action
+
 
 def size(self, dim=None):
     if dim is None:

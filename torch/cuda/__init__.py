@@ -5,3 +5,7 @@ from mindspore.hal import device_count
 FloatTensor = Tensor
 HalfTensor = Tensor
 BFloat16Tensor = Tensor
+
+def current_device():
+    return -1
+
