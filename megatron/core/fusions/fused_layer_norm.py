@@ -10,7 +10,7 @@ from torch.nn import init
 from torch.nn.parameter import Parameter
 
 from megatron.core.transformer import TransformerConfig
-from megatron.core.utils import make_viewless_tensor
+# from megatron.core.utils import make_viewless_tensor
 
 try:
     from apex.contrib.layer_norm.layer_norm import FastLayerNormFN
@@ -144,9 +144,9 @@ class FusedLayerNorm(torch.nn.Module):
             # a populated '_base' field). This will result in schedule.py's
             # deallocate_output_tensor() throwing an error, so a viewless tensor is
             # created to prevent this.
-            output = make_viewless_tensor(
-                inp=output, requires_grad=input.requires_grad, keep_graph=True
-            )
+            # output = make_viewless_tensor(
+            #     inp=output, requires_grad=input.requires_grad, keep_graph=True
+            # )
 
         else:
             if (

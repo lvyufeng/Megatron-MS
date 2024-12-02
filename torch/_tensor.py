@@ -3,6 +3,12 @@ import mindspore
 from mindspore import Tensor, ops
 from mindspore.common._stub_tensor import StubTensor
 
+def numel(self):
+    return ops.size(self)
+
+Tensor.numel = numel
+setattr(StubTensor, 'numel', numel)
+
 def _repeat(self, *sizes):
     return ops.tile(self, tuple(sizes))
 

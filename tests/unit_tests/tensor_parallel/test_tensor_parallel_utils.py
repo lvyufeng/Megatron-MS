@@ -3,8 +3,6 @@ import megatron.core.tensor_parallel.utils as util
 import megatron.core.parallel_state as ps
 from tests.unit_tests.test_utilities import Utils
 
-rank = Utils.rank
-
 def test_split_tensor_along_last_dim():
     input_tensor = torch.rand((3,4))
     torch.equal(input_tensor[0:2,0:2], util.split_tensor_along_last_dim(input_tensor,2)[0])
@@ -12,6 +10,7 @@ def test_split_tensor_along_last_dim():
 
 def test_split_tensor_into_1d_equal_chunks():
     Utils.initialize_model_parallel(tensor_model_parallel_size=2, pipeline_model_parallel_size=4)
+    rank = Utils.rank
     input_tensor = torch.rand((3,4))
     output_tensor = util.split_tensor_into_1d_equal_chunks(input_tensor)
     if rank % 2 == 0 :
@@ -26,6 +25,7 @@ def test_split_tensor_into_1d_equal_chunks():
 
 def test_gather_split_1d_tensor():
     Utils.initialize_model_parallel(tensor_model_parallel_size=2, pipeline_model_parallel_size=4)
+    rank = Utils.rank
     input_tensor = torch.ones((2,4)).cuda() * rank
     actual_output_tensor = util.gather_split_1d_tensor(input_tensor)
     if rank %2 == 0:
@@ -36,8 +36,9 @@ def test_gather_split_1d_tensor():
     Utils.destroy_model_parallel()
 
 def test_vocab():
+    Utils.initialize_distributed()
+    rank = Utils.rank
     global_vocab_size = 1600
     per_partition_vocab_size = 1600 / Utils.world_size
     assert((rank * per_partition_vocab_size, (rank + 1)* per_partition_vocab_size) == (util.VocabUtility.vocab_range_from_per_partition_vocab_size(global_vocab_size // Utils.world_size, rank, Utils.world_size)))
     assert((rank * per_partition_vocab_size, (rank + 1)* per_partition_vocab_size) == (util.VocabUtility.vocab_range_from_global_vocab_size(global_vocab_size, rank, Utils.world_size)))
-    

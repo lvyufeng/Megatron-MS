@@ -20,6 +20,8 @@ def eq(input, other):
 
 # equal
 def equal(input, other):
+    if input.shape != other.shape:
+        return False
     out = eq(input, other)
     return out.all()
 

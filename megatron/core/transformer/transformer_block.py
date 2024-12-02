@@ -11,7 +11,7 @@ from torch import Tensor
 from megatron.core import InferenceParams, parallel_state, tensor_parallel
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.dist_checkpointing.utils import replace_prefix_for_sharding
-from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
+# from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.custom_layers.transformer_engine import (
     TENorm,
@@ -23,7 +23,7 @@ from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.transformer_layer import BaseTransformerLayer, TransformerLayer
 from megatron.core.transformer.utils import sharded_state_dict_default
-from megatron.core.utils import make_sharded_tensor_for_checkpoint, make_viewless_tensor
+from megatron.core.utils import make_sharded_tensor_for_checkpoint
 
 
 def get_num_layers_to_build(config: TransformerConfig) -> int:
@@ -317,9 +317,9 @@ class TransformerBlock(MegatronModule):
         #   likely redundant, since p2p_communication.py (likely originator)
         #   already creates viewless tensors. That said, make_viewless_tensor()
         #   is called here to be future-proof and corner-case-proof.
-        hidden_states = make_viewless_tensor(
-            inp=hidden_states, requires_grad=True, keep_graph=True,
-        )
+        # hidden_states = make_viewless_tensor(
+        #     inp=hidden_states, requires_grad=True, keep_graph=True,
+        # )
 
         if self.config.sequence_parallel:
             rng_context = tensor_parallel.get_cuda_rng_tracker().fork()

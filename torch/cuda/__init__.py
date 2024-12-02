@@ -9,3 +9,5 @@ BFloat16Tensor = Tensor
 def current_device():
     return -1
 
+def is_available():
+    return True

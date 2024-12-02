@@ -1,6 +1,7 @@
 from mindspore.communication import GlobalComm, get_group_size as get_world_size, get_rank, create_group
 from mindspore.mint.distributed import init_process_group, destroy_process_group
-from mindspore.communication.comm_func import barrier, all_reduce as all_reduce_, broadcast as broadcast_
+from mindspore.communication.comm_func import barrier, all_reduce as all_reduce_, broadcast as broadcast_, \
+    all_gather_into_tensor, reduce_scatter_tensor
 from mindspore.communication._comm_helper import _ExistingGroup, _HCCL_TEST_AVAILABLE
 from mindspore.ops import ReduceOp, assign
 
@@ -109,3 +110,13 @@ def broadcast(tensor, src=0, group=GlobalComm.WORLD_COMM_GROUP):
         tensor = tensor.to(torch.int32)
     new_tensor = broadcast_(tensor, src, group)
     return new_tensor
+
+def all_gather(tensor_list, tensor, group=None, async_op=False):
+    new_tensor, _ = all_gather_into_tensor(tensor, group, async_op)
+    new_tensor_list = torch.chunk(new_tensor, len(tensor_list))
+    for t, new_t in zip(tensor_list, new_tensor_list):
+        t.assign_value(new_t)
+    return new_tensor_list
+
+def is_available():
+    return True

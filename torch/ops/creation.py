@@ -106,16 +106,20 @@ def eye(n, m=None, *, dtype=None):
     return ops.eye(n, m, dtype)
 
 # empty
-def empty(*size, dtype=None, device=None):
+def empty(*size, dtype=None, device=None, requires_grad=False):
     if isinstance(size[0], (tuple, list)):
         size = size[0]
     if dtype is None:
         dtype = get_default_dtype()
     out = CTensor(dtype, size)
-    return mindspore.Tensor(out)
+    out = mindspore.Tensor(out)
+    if requires_grad:
+        out.requires_grad = True
+    return out
 
 # empty_like
-
+def empty_like(input):
+    return empty(input.shape, dtype=input.dtype)
 
 # empty_strided
 
@@ -154,4 +158,8 @@ def polar(abs, angle):
 def heaviside(input, values):
     return ops.heaviside(input, values)
 
-__all__ = ['arange', 'as_strided', 'complex', 'empty', 'eye', 'from_numpy', 'full', 'full_like', 'heaviside', 'linspace', 'logspace', 'ones', 'ones_like', 'polar', 'range', 'zeros', 'zeros_like']
+__all__ = ['arange', 'as_strided', 'complex', 'empty', 'empty_like',
+           'eye', 'from_numpy', 'full', 'full_like',
+           'heaviside', 'linspace', 'logspace', 'ones', 'ones_like',
+           'polar', 'range', 'zeros', 'zeros_like'
+]

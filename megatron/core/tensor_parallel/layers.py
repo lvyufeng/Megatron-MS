@@ -136,8 +136,11 @@ def _initialize_affine_weight_cpu(
 
     with torch.no_grad():
         # all tensors must live on the same device
-        cpu_weight = torch.cat(my_weight_list, dim=partition_dim).to_dense()
-        weight.data.copy_(cpu_weight)
+        # cpu_weight = torch.cat(my_weight_list, dim=partition_dim).to_dense()
+        # weight.data.copy_(cpu_weight)
+        cpu_weight = torch.cat(my_weight_list, dim=partition_dim)
+        weight.assign_value(cpu_weight)
+
     if return_master_weight:
         return master_weight
     return None

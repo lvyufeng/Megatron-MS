@@ -5,11 +5,11 @@ import megatron.core.parallel_state as ps
 class Utils:
 
     world_size = torch.cuda.device_count()
-    rank = int(os.environ['LOCAL_RANK'])
+    rank = None
 
     @staticmethod
     def initialize_distributed():
-        if not torch.distributed.is_initialized() and Utils.rank >= 0:
+        if not torch.distributed.is_initialized():
             print(f'Initializing torch.distributed with rank: {Utils.rank}, world_size: {Utils.world_size}')
             # torch.cuda.set_device(Utils.rank % torch.cuda.device_count())
             init_method = 'tcp://'
@@ -17,8 +17,9 @@ class Utils:
             master_port = os.getenv('MASTER_PORT', '6000')
             init_method += master_ip + ':' + master_port
             torch.distributed.init_process_group(backend='hccl', world_size=Utils.world_size, rank=Utils.rank, init_method=init_method)
-
             torch.distributed.barrier()
+
+        Utils.rank = torch.distributed.get_rank()
 
     @staticmethod
     def set_world_size(world_size=None, rank=None):
