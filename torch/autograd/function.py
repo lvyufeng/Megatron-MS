@@ -9,6 +9,8 @@ from mindspore.common.api import _pynative_executor
 from mindnlp.configs import GENERATOR_SEED
 
 grad_ = GradOperation(False, True, False)
+grad_sens_ = GradOperation(False, True, True)
+grad_input_sens_ = GradOperation(True, False, True)
 
 def value_and_grad(fn, params_or_argnums, has_aux=False, attach_grads=True):
     use_argnums = False
@@ -63,6 +65,45 @@ def grad(fn, params_or_argnums=None, has_aux=False):
         _, g = value_and_grad_f(*args)
         return g
     return grad_f
+
+def vjp(fn, *inputs, weights=None, has_aux=False):
+    if weights is None:
+        grad_ = grad_input_sens_
+    else:
+        grad_ = grad_sens_
+    def fn_aux(*args):
+        outputs = fn(*args)
+        no_grad_outputs = ()
+        for out in outputs[1:]:
+            no_grad_outputs += (stop_gradient(out),)
+        return outputs[0], no_grad_outputs
+
+    if has_aux:
+        fn_ = fn_aux
+    else:
+        fn_ = fn
+
+
+    _pynative_executor.set_grad_flag(True)
+    _pynative_executor.new_graph(fn, *inputs)
+    values = fn_(*inputs)
+    _pynative_executor.end_graph(fn, values, *inputs)
+
+    def wrap_container(*v):
+        sens = v
+        if len(v) == 1:
+            sens = v[0]
+
+        grads = _pynative_executor.grad(fn_, grad_, weights, None, *inputs, sens)
+        return grads
+
+    res = fn(*inputs)
+    if has_aux:
+        if len(res) == 2:
+            return res[0], wrap_container, res[1]
+        return res[0], wrap_container, res[1:]
+    return res, wrap_container
+
 
 class Function(nn.Cell):
     def __init__(self, auto_prefix=True, flags=None):

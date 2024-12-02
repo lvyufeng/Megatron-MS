@@ -202,7 +202,7 @@ class CheckpointFunction(torch.autograd.Function):
         self.distribute_saved_activations = distribute_saved_activations
 
         # Copy the rng states.
-        self.fwd_cpu_rng_state = torch.get_rng_state()
+        # self.fwd_cpu_rng_state = torch.get_rng_state()
         self.fwd_cuda_rng_state = torch.cuda.get_rng_state()
         self.fwd_cuda_rng_state_tracker = get_cuda_rng_tracker().get_states()
 
@@ -212,10 +212,11 @@ class CheckpointFunction(torch.autograd.Function):
         # Divide hidden states across model parallel group and only keep
         # the chunk corresponding to the current rank.
         if distribute_saved_activations:
-            self.input_0_shape = args[0].data.shape
-            safely_set_viewless_tensor_data(
-                args[0], split_tensor_into_1d_equal_chunks(args[0].data, new_buffer=True)
-            )
+            self.input_0_shape = args[0].shape
+            # safely_set_viewless_tensor_data(
+            #     args[0], split_tensor_into_1d_equal_chunks(args[0], new_buffer=True)
+            # )
+            args[0].assign_value(split_tensor_into_1d_equal_chunks(args[0], new_buffer=True))
  
         # Store everything.
         self.save_for_backward(*args)
@@ -223,34 +224,35 @@ class CheckpointFunction(torch.autograd.Function):
         return outputs
 
     def backward(self, *args):
-        if not torch.autograd._is_checkpoint_valid():
-            raise RuntimeError(
-                "Checkpointing is not compatible with .grad(), "
-                "please use .backward() if possible"
-            )
+        # if not torch.autograd._is_checkpoint_valid():
+        #     raise RuntimeError(
+        #         "Checkpointing is not compatible with .grad(), "
+        #         "please use .backward() if possible"
+        #     )
         inputs = self.saved_tensors
         if self.distribute_saved_activations:
-            safely_set_viewless_tensor_data(
-                inputs[0], gather_split_1d_tensor(inputs[0].data).view(self.input_0_shape)
-            )
+            # safely_set_viewless_tensor_data(
+            #     inputs[0], gather_split_1d_tensor(inputs[0]).view(self.input_0_shape)
+            # )
+            inputs[0].assign_value(gather_split_1d_tensor(inputs[0]).view(self.input_0_shape))
 
         # Store the current states.
-        bwd_cpu_rng_state = torch.get_rng_state()
+        # bwd_cpu_rng_state = torch.get_rng_state()
         bwd_cuda_rng_state = torch.cuda.get_rng_state()
         bwd_cuda_rng_state_tracker = get_cuda_rng_tracker().get_states()
 
         # Set the states to what it used to be before the forward pass.
-        torch.set_rng_state(self.fwd_cpu_rng_state)
+        # torch.set_rng_state(self.fwd_cpu_rng_state)
         _set_cuda_rng_state(self.fwd_cuda_rng_state)
         get_cuda_rng_tracker().set_states(self.fwd_cuda_rng_state_tracker)
 
         # Compute the forward pass.
-        detached_inputs = detach_variable(inputs)
+        # detached_inputs = detach_variable(inputs)
         with torch.enable_grad():
-            outputs = self.run_function(*detached_inputs)
+            outputs, f_vjp = torch.autograd.vjp(self.run_function, *inputs)
 
         # Set the states back to what it was at the start of this function.
-        torch.set_rng_state(bwd_cpu_rng_state)
+        # torch.set_rng_state(bwd_cpu_rng_state)
         _set_cuda_rng_state(bwd_cuda_rng_state)
         get_cuda_rng_tracker().set_states(bwd_cuda_rng_state_tracker)
 
@@ -259,8 +261,7 @@ class CheckpointFunction(torch.autograd.Function):
 
         # filter out non tensor outputs for backward pass
         outputs, args = zip(*filter(lambda x: torch.is_tensor(x[0]), zip(outputs, args)))
-        torch.autograd.backward(outputs, args)
-        grads = tuple(inp.grad if isinstance(inp, torch.Tensor) else inp for inp in detached_inputs)
+        grads = f_vjp(*args)
         return (None, None) + grads
 
 
