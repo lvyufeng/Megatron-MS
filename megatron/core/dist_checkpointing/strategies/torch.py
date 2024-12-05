@@ -13,7 +13,7 @@ import torch
 from torch.distributed import checkpoint
 from torch.distributed._shard.metadata import ShardMetadata
 from torch.distributed._shard.sharded_tensor import Shard, ShardedTensorMetadata, TensorProperties
-from torch.distributed._sharded_tensor import ShardedTensor as TorchShardedTensor
+from torch.distributed._shard.sharded_tensor import ShardedTensor as TorchShardedTensor
 from torch.distributed.checkpoint import (
     DefaultLoadPlanner,
     DefaultSavePlanner,
@@ -164,10 +164,10 @@ def sharded_tensor_to_torch_sharded_tensor(
         size=torch.Size(some_sh_ten.global_shape),
         tensor_properties=TensorProperties(
             dtype=tensor.dtype,
-            layout=tensor.layout,
+            # layout=tensor.layout,-
             requires_grad=tensor.requires_grad,
-            memory_format=torch.contiguous_format,
-            pin_memory=tensor.is_pinned(),
+            # memory_format=torch.contiguous_format,
+            # pin_memory=tensor.is_pinned(),
         ),
     )
     pyt_sh_ten = TorchShardedTensor._init_from_local_shards_and_global_metadata(
@@ -219,7 +219,7 @@ def mcore_to_pyt_state_dict(
                 else:
                     raise CheckpointingException(f'`data` attr is None for {sh_ten}')
             else:
-                sh_ten.data = sh_ten.data.detach()
+                sh_ten.data = sh_ten.data
                 if sh_ten.allow_shape_mismatch and is_loading:
                     sh_ten.data.zero_()
 

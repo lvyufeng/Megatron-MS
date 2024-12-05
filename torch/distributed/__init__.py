@@ -1,122 +1,98 @@
-from mindspore.communication import GlobalComm, get_group_size as get_world_size, get_rank, create_group
-from mindspore.mint.distributed import init_process_group, destroy_process_group
-from mindspore.communication.comm_func import barrier, all_reduce as all_reduce_, broadcast as broadcast_, \
-    all_gather_into_tensor, reduce_scatter_tensor
-from mindspore.communication._comm_helper import _ExistingGroup, _HCCL_TEST_AVAILABLE
-from mindspore.ops import ReduceOp, assign
+# mypy: allow-untyped-defs
+import logging
+import pdb
+import sys
+import traceback
+import typing
 
 import torch
 
-_HCCL_TEST_AVAILABLE = True
 
-ProcessGroup = str
-
-def is_initialized():
-    return GlobalComm.INITED
-
-_group_count = 0
-NON_GROUP_MEMBER = -100
-
-def _process_group_name(ranks):
-    global _group_count
-    pg_name = str(_group_count)
-    _group_count += 1
-    return pg_name
-
-def new_group(ranks=None, timeout=None, backend=None, pg_options=None, use_local_synchronization=False, group_desc=None):
-    pg_name = _process_group_name(ranks)
-    ranks = list(ranks)
-    if pg_name in _ExistingGroup.ITEMS:
-        raise ValueError(f'{pg_name} already exist.')
-    if get_rank() not in ranks:
-        return NON_GROUP_MEMBER
-    create_group(pg_name, ranks)
-    return pg_name
-
-class Backend:
-    class Options:
-        def __init__(self, backend: str, timeout = ...) -> None: ...
-        @property
-        def backend(self) -> str: ...
-        @property
-        def _timeout(self) -> int: ...
-        @_timeout.setter
-        def _timeout(self, val) -> None: ...
-
-    def __init__(
-        self,
-        rank: int,
-        size: int,
-    ) -> None: ...
-    @property
-    def supports_splitting(self) -> bool: ...
-    @property
-    def options(self) -> Options: ...
-    def rank(self) -> int: ...
-    def size(self) -> int: ...
-    def eager_connect_single_device(self, device: None) -> None: ...
-    def _set_sequence_number_for_group(self) -> None: ...
-    def _set_default_timeout(self, timeout) -> None: ...
+log = logging.getLogger(__name__)
 
 
-class ProcessGroupNCCL(Backend):
-    class NCCLConfig:
-        blocking: int
-        cga_cluster_size: int
-        min_ctas: int
-        max_ctas: int
+def is_available() -> bool:
+    """
+    Return ``True`` if the distributed package is available.
 
-    class Options(Backend.Options):
-        config: dict
-        is_high_priority_stream: bool
-        split_from: dict
-        split_color: int
-        global_ranks_in_group: list[int]
-        group_name: str
-
-        def __init__(self, is_high_priority_stream: bool = False): ...
-
-    def __init__(
-        self,
-        store,
-        rank: int,
-        size: int,
-        options: Options,
-    ) -> None: ...
-    def _group_start(self) -> None: ...
-    def _group_end(self) -> None: ...
-    def _set_default_timeout(self, timeout) -> None: ...
-    def _shutdown(self) -> None: ...
-    def perform_nocolor_split(self, device) -> None: ...
-    def register_mem_pool(self, pool) -> None: ...
-    def deregister_mem_pool(self, pool) -> None: ...
-    def comm_split_count(self) -> int: ...
-    def _add_ephemeral_timeout(self, timeout) -> None: ...
-    def abort(self) -> None: ...
-    def _is_initialized(self) -> bool: ...
-    @property
-    def uid(self) -> int: ...
-    @property
-    def options(self) -> Options: ...  # type: ignore[override]
-
-def all_reduce(tensor, op=ReduceOp.SUM, group=GlobalComm.WORLD_COMM_GROUP, async_op=False):
-    if tensor.dtype == torch.int64:
-        tensor = tensor.to(torch.int32)
-    new_tensor, handle = all_reduce_(tensor, op, group, async_op)
-    return new_tensor, handle
-
-def broadcast(tensor, src=0, group=GlobalComm.WORLD_COMM_GROUP):
-    if tensor.dtype == torch.int64:
-        tensor = tensor.to(torch.int32)
-    new_tensor = broadcast_(tensor, src, group)
-    return new_tensor
-
-def all_gather(tensor_list, tensor, group=None, async_op=False):
-    new_tensor, _ = all_gather_into_tensor(tensor, group, async_op)
-    new_tensor_list = torch.chunk(new_tensor, len(tensor_list))
-    for t, new_t in zip(tensor_list, new_tensor_list):
-        t.assign_value(new_t)
-    return new_tensor_list
-
-def is_available():
+    Otherwise,
+    ``torch.distributed`` does not expose any other APIs. Currently,
+    ``torch.distributed`` is available on Linux, MacOS and Windows. Set
+    ``USE_DISTRIBUTED=1`` to enable it when building PyTorch from source.
+    Currently, the default value is ``USE_DISTRIBUTED=1`` for Linux and Windows,
+    ``USE_DISTRIBUTED=0`` for MacOS.
+    """
     return True
+
+# Custom Runtime Errors thrown from the distributed package
+DistError = RuntimeError
+DistBackendError = RuntimeError
+DistNetworkError = RuntimeError
+DistStoreError = RuntimeError
+
+if is_available():
+    from .c10d import (
+        # _broadcast_coalesced,
+        # _compute_bucket_assignment_by_size,
+        # _ControlCollectives,
+        # _DEFAULT_FIRST_BUCKET_BYTES,
+        # _make_nccl_premul_sum,
+        # _register_builtin_comm_hook,
+        # _register_comm_hook,
+        # _StoreCollectives,
+        # _test_python_store,
+        # _verify_params_across_processes,
+        # Backend as _Backend,
+        # BuiltinCommHookType,
+        # DebugLevel,
+        # FileStore,
+        # get_debug_level,
+        # GradBucket,
+        # Logger,
+        PrefixStore,
+        ProcessGroup as ProcessGroup,
+        # Reducer,
+        # set_debug_level,
+        # set_debug_level_from_env,
+        Store,
+        # TCPStore,
+        Work as _Work,
+    )
+
+
+    # from .device_mesh import DeviceMesh, init_device_mesh
+
+    # Variables prefixed with underscore are not auto imported
+    # See the comment in `distributed_c10d.py` above `_backend` on why we expose
+    # this.
+    from .distributed_c10d import *  # noqa: F403
+    from .distributed_c10d import (
+        _all_gather_base,
+        _coalescing_manager,
+        _CoalescingManager,
+        _create_process_group_wrapper,
+        _get_process_group_name,
+        _rank_not_in_group,
+        _reduce_scatter_base,
+        get_node_local_rank,
+    )
+    from .remote_device import _remote_device
+    # from .rendezvous import (
+    #     _create_store_from_options,
+    #     register_rendezvous_handler,
+    #     rendezvous,
+    # )
+
+    # set_debug_level_from_env()
+
+else:
+    # This stub is sufficient to get
+    #   python test/test_public_bindings.py -k test_correct_module_names
+    # working even when USE_DISTRIBUTED=0.  Feel free to add more
+    # stubs as necessary.
+    # We cannot define stubs directly because they confuse pyre
+
+    class _ProcessGroupStub:
+        pass
+
+    sys.modules["torch.distributed"].ProcessGroup = _ProcessGroupStub  # type: ignore[attr-defined]

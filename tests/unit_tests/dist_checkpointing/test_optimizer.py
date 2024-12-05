@@ -92,17 +92,20 @@ def initialize_gpt_model(pre_process=True, post_process=True, seed=0, **config_k
     model = GPTModel(config=transformer_config, transformer_layer_spec=get_gpt_layer_local_spec(), vocab_size=128, max_sequence_length=4,
                      pre_process=pre_process, post_process=post_process)
 
-    model.bfloat16()
+    # model.bfloat16()
+    model.half()
     with torch.no_grad():
         for p in model.parameters():
-            p.random_()
+            # p.random_()
+            torch.nn.init.uniform_(p)
     return model
 
 
 def init_mock_args(args):
     args.data_parallel_random_init = False
     args.virtual_pipeline_model_parallel_size = None
-    args.bf16 = True
+    # args.bf16 = True
+    args.bf16 = False
     args.accumulate_allreduce_grads_in_fp32 = False
     args.overlap_grad_reduce = False
     args.use_distributed_optimizer = True
@@ -114,7 +117,8 @@ def setup_model_and_optimizer(seed):
         init_mock_args(mock_args.return_value)
         model = get_model(partial(initialize_gpt_model, seed=seed))
 
-    config = OptimizerConfig(bf16=True, params_dtype=torch.bfloat16, use_distributed_optimizer=True)
+    config = OptimizerConfig(lr=0.001, fp16=True, params_dtype=torch.float16, use_distributed_optimizer=True)
+    # config = OptimizerConfig(bf16=True, params_dtype=torch.bfloat16, use_distributed_optimizer=True)
     optimizer = get_megatron_optimizer(config, model)
 
     torch.manual_seed(seed + 1)
@@ -140,6 +144,7 @@ class TestDistributedOptimizer:
         # ((2, 1), 2, 2),
     ])
     def test_full_dp_sharding(self, tmp_path_dist_ckpt, tp_pp, src_dp, dest_dp):
+        Utils.initialize_distributed()
         src_world_size = tp_pp[0] * tp_pp[1] * src_dp
         dest_world_size = tp_pp[0] * tp_pp[1] * dest_dp
         assert src_world_size <= Utils.world_size, (tp_pp, src_dp)

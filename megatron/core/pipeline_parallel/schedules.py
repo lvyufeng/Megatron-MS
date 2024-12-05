@@ -4,7 +4,6 @@ import contextlib
 from typing import Callable, Iterator, List, Optional, Union
 
 import torch
-from torch.autograd.variable import Variable
 
 from megatron.core import parallel_state
 from megatron.core.enums import ModelType

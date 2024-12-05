@@ -5,6 +5,8 @@ import os
 from enum import Enum
 from logging import getLogger
 from typing import Dict, List, Optional
+import operator
+from functools import reduce
 
 import torch
 
@@ -130,14 +132,13 @@ class Bucket:
             local_data_view = shard_buffer(self.grad_data, self.data_parallel_world_size)[
                 self.data_parallel_rank
             ]
-            self.communication_handle = torch.distributed._reduce_scatter_base(
+            self.grad_data, self.communication_handle = torch.distributed.reduce_scatter_tensor(
                 local_data_view,
-                self.grad_data,
                 group=self.data_parallel_group,
                 async_op=self.overlap_grad_reduce,
             )
         else:
-            self.communication_handle = torch.distributed.all_reduce(
+            self.grad_data, self.communication_handle = torch.distributed.all_reduce(
                 self.grad_data, group=self.data_parallel_group, async_op=self.overlap_grad_reduce
             )
         self.communication_issued = True
@@ -359,16 +360,16 @@ class ParamAndGradBuffer:
             # Assign param.data to appropriate segment of self.param_data.
             if self.param_data is not None:
                 old_param_data = param.data
-                param.data = self._get(
-                    param.data.shape, data_start_index, buffer_type=BufferType.PARAM
+                param = self._get(
+                    param.shape, data_start_index, buffer_type=BufferType.PARAM
                 )
-                assert old_param_data._base is None
+                # assert old_param_data._base is None
                 # Copy tensor values (from initialization or checkpoint).
-                param.data.detach().copy_(old_param_data)
+                param.copy_(old_param_data)
                 del old_param_data
 
             param.main_grad = self._get(
-                param.data.shape, data_start_index, buffer_type=BufferType.GRAD
+                param.shape, data_start_index, buffer_type=BufferType.GRAD
             )
             if bucket_id != cur_bucket_id:
                 bucket_data_end_index = _pad_if_needed(data_start_index)
@@ -408,17 +409,17 @@ class ParamAndGradBuffer:
             for index, bucket in enumerate(self.buckets):
                 numel = 0
                 for param in bucket.params:
-                    numel += param.data.nelement()
+                    numel += param.nelement()
                 logger.info(f'Params for bucket {index+1} ({numel} elements):')
-                for param in bucket.params:
-                    logger.info(f'    {param_to_name[param]}')
+                # for param in bucket.params:
+                #     logger.info(f'    {param_to_name[param.stub_sync()]}')
 
     def _get(self, shape: torch.Size, start_index: int, buffer_type: BufferType) -> torch.Tensor:
         """
         Return a tensor with the input `shape` as a view into the 1-D data starting at
         `start_index`.
         """
-        end_index = start_index + shape.numel()
+        end_index = start_index + reduce(operator.mul, shape)
         assert end_index <= self.numel, 'Requested tensor is out of buffer range'
         if buffer_type == BufferType.PARAM:
             assert self.param_data is not None

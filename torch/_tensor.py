@@ -8,6 +8,10 @@ def numel(self):
 
 Tensor.numel = numel
 setattr(StubTensor, 'numel', numel)
+Tensor.nelement = numel
+StubTensor.nelement = numel
+
+StubTensor.__hash__ = Tensor.__hash__
 
 def _repeat(self, *sizes):
     return ops.tile(self, tuple(sizes))
@@ -32,6 +36,12 @@ def size(self, dim=None):
 
 Tensor.size = size
 StubTensor.size = size
+
+def dim(self):
+    return self.ndim
+
+Tensor.dim = dim
+StubTensor.dim = dim
 
 def clone(self):
     return copy.deepcopy(self)

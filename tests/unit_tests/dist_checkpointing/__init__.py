@@ -24,7 +24,9 @@ class TempNamedDir(TemporaryDirectory):
     def __init__(self, name: Union[str, Path], sync=True,
                  ignore_cleanup_errors=False) -> None:
         self.name = str(name)
+        print(name, Utils.rank)
         if Utils.rank == 0:
+            print('mkdir')
             os.makedirs(name, exist_ok=True)
             empty_dir(Path(name))
 

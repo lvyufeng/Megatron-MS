@@ -33,7 +33,7 @@ def from_numpy(ndarray):
 
 # zeros
 _zeros = ops.Zeros()
-def zeros(*size, dtype=None):
+def zeros(*size, dtype=None, device=None, requires_grad=False):
     if dtype is None:
         dtype = get_default_dtype()
     if isinstance(size[0], (tuple, list)):
@@ -53,7 +53,7 @@ def zeros_like(input, *, dtype=None):
 
 # ones
 _ones = ops.Ones()
-def ones(*size, dtype=None):
+def ones(*size, dtype=None, device=None):
     if isinstance(size[0], (tuple, list)):
         size = size[0]
     if dtype is None:

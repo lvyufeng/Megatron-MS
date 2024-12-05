@@ -83,7 +83,7 @@ class TENorm:
     ):
         if config.normalization == "LayerNorm":
             instance = nn.LayerNorm(
-                hidden_size=hidden_size,
+                normalized_shape=hidden_size,
                 eps=eps,
                 # sequence_parallel=config.sequence_parallel,
                 # zero_centered_gamma=config.layernorm_zero_centered_gamma,
@@ -91,7 +91,7 @@ class TENorm:
             )
         elif config.normalization == "RMSNorm":
             instance = RMSNorm(
-                hidden_size=hidden_size,
+                dim=hidden_size,
                 eps=eps,
                 sequence_parallel=config.sequence_parallel,
                 # zero_centered_gamma=config.layernorm_zero_centered_gamma,

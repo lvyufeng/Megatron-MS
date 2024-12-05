@@ -17,7 +17,16 @@ from torch import _tensor
 from mindspore import jit
 from mindspore.common.dtype import *
 from mindspore.common.dtype import tensor_type as dtype
-from mindspore import Tensor
+from mindspore import Tensor, default_generator, Generator
+from mindspore.hal import Stream
+from mindspore import multiprocessing
+
+inf = float("inf")
+nan = float("nan")
+
+class device:
+    def __init__(self, name):
+        pass
 
 from . import optim, ops, nn, distributions, cuda, distributed
 from .utils import get_default_dtype, set_default_dtype, manual_seed
@@ -25,12 +34,11 @@ from .autograd import no_grad, enable_grad, value_and_grad
 from .serialization import *
 from .ops import *
 
-class device:
-    pass
 
 FloatTensor = Tensor
 HalfTensor = Tensor
 BFloat16Tensor = Tensor
+LongTensor = Tensor
 
 Size = tuple
 
@@ -40,3 +48,7 @@ float = float32
 
 def tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=False):
     return Tensor(data, dtype)
+
+strided = None
+contiguous_format = None
+preserve_format = None

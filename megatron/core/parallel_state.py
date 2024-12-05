@@ -592,6 +592,7 @@ def get_data_parallel_group(with_context_parallel=False):
 
 def get_data_parallel_group_gloo(with_context_parallel=False):
     """Get the data parallel group-gloo the caller rank belongs to."""
+    return _DATA_PARALLEL_GROUP_GLOO
     if with_context_parallel:
         assert (
             _DATA_PARALLEL_GROUP_WITH_CP_GLOO is not None

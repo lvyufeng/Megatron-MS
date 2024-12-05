@@ -162,15 +162,17 @@ class DistributedDataParallel(MegatronModule):
         # Register backward hook.
         # Accumulation function for the gradients need to be stored so they
         # don't go out of scope.
-        self.grad_accs = []
+        # self.grad_accs = [] # mindspore no needed
         for param in self.module.parameters():
             if param.requires_grad:
+                # mindspore no needed.
                 # Expand so we get access to grad_fn.
-                param_tmp = param.expand_as(param)
-                # Get the gradient accumulator function.
-                grad_acc = param_tmp.grad_fn.next_functions[0][0]
-                grad_acc.register_hook(self._make_param_hook(param, self.param_to_buffer))
-                self.grad_accs.append(grad_acc)
+                # param_tmp = param.expand_as(param)
+                # # Get the gradient accumulator function.
+                # grad_acc = param_tmp.grad_fn.next_functions[0][0]
+                # grad_acc.register_hook(self._make_param_hook(param, self.param_to_buffer))
+                # self.grad_accs.append(grad_acc)
+                param.register_hook(self._make_param_hook(param, self.param_to_buffer))
 
     def forward(self, *inputs, **kwargs):
         """
@@ -187,7 +189,7 @@ class DistributedDataParallel(MegatronModule):
         Creates the all-reduce / reduce-scatter hook for backprop.
         """
 
-        def param_hook(*unused):
+        def param_hook(grad):
             if param.requires_grad:
                 if self.overlap_grad_reduce:
                     assert (
@@ -196,7 +198,7 @@ class DistributedDataParallel(MegatronModule):
                 if param.grad is not None and (
                     not param.grad_added_to_main_grad or getattr(param, 'zero_out_wgrad', False)
                 ):
-                    param.main_grad.add_(param.grad.data)
+                    param.main_grad.add_(grad)
                 param.grad = None
 
                 if self.overlap_grad_reduce:

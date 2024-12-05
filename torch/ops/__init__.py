@@ -14,7 +14,7 @@ from .fft_op import *
 from .spectral import *
 from ._inner import *
 
-__all__ = ['optim']
+__all__ = []
 __all__.extend(_inner.__all__)
 __all__.extend(array.__all__)
 __all__.extend(blas.__all__)

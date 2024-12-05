@@ -83,7 +83,7 @@ def gather_split_1d_tensor(tensor):
     # This API calls directly NCCL all-gather versus the former does
     # internal copies and can potentially cause slow down.
     gathered, _ = torch.distributed.all_gather_into_tensor(
-        tensor, group=parallel_state.get_tensor_model_parallel_group()
+        gathered, tensor, group=parallel_state.get_tensor_model_parallel_group()
     )
 
     return gathered.reshape(numel_gathered)

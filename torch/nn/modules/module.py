@@ -687,8 +687,9 @@ class Module:
 
         return sorted(keys)
 
-    def cuda(self):
-        return self._apply(lambda t: t.move_to('GPU'))
+    def cuda(self, device=None):
+        # return self._apply(lambda t: t.move_to('GPU'))
+        return self.npu()
 
     def npu(self):
         return self._apply(lambda t: t.move_to('Ascend'))
