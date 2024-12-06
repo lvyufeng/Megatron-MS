@@ -165,7 +165,6 @@ class _DistWrapper:
         except BaseException as e:
             local_data = _wrap_exception(e)
 
-        print(local_data)
         all_data = self.gather_object(local_data)
         all_results: Optional[List[Union[R, CheckpointException]]] = None
         if self.is_coordinator:

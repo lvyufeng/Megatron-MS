@@ -45,6 +45,7 @@ Size = tuple
 long = int64
 int = int32
 float = float32
+bool = bool_
 
 def tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=False):
     return Tensor(data, dtype)

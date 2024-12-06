@@ -254,7 +254,6 @@ def initialize_model_parallel(
         _PIPELINE_MODEL_PARALLEL_SPLIT_RANK = pipeline_model_parallel_split_rank
 
     rank = torch.distributed.get_rank()
-    print(rank)
 
     nccl_comm_cfgs = {}
     if nccl_communicator_config_path is not None:
@@ -290,10 +289,10 @@ def initialize_model_parallel(
             group = torch.distributed.new_group(
                 ranks, timeout=timeout, pg_options=get_nccl_options('dp', nccl_comm_cfgs)
             )
-            # group_gloo = torch.distributed.new_group(ranks, timeout=timeout, backend="gloo")
+            group_gloo = torch.distributed.new_group(ranks, timeout=timeout)#, backend="gloo")
             if rank in ranks:
                 _DATA_PARALLEL_GROUP = group
-                # _DATA_PARALLEL_GROUP_GLOO = group_gloo
+                _DATA_PARALLEL_GROUP_GLOO = group_gloo
                 _DATA_PARALLEL_GLOBAL_RANKS = ranks
         for j in range(tensor_model_parallel_size):
             ranks_with_cp = range(start_rank + j, end_rank, tensor_model_parallel_size)
@@ -301,12 +300,12 @@ def initialize_model_parallel(
             group_with_cp = torch.distributed.new_group(
                 ranks_with_cp, timeout=timeout, pg_options=get_nccl_options('dp_cp', nccl_comm_cfgs)
             )
-            # group_with_cp_gloo = torch.distributed.new_group(
-            #     ranks_with_cp, timeout=timeout, backend="gloo"
-            # )
+            group_with_cp_gloo = torch.distributed.new_group(
+                ranks_with_cp, timeout=timeout#, backend="gloo"
+            )
             if rank in ranks_with_cp:
                 _DATA_PARALLEL_GROUP_WITH_CP = group_with_cp
-                # _DATA_PARALLEL_GROUP_WITH_CP_GLOO = group_with_cp_gloo
+                _DATA_PARALLEL_GROUP_WITH_CP_GLOO = group_with_cp_gloo
                 _DATA_PARALLEL_GLOBAL_RANKS_WITH_CP = ranks_with_cp
 
     # Apply SHARP to DP process groups
@@ -592,7 +591,7 @@ def get_data_parallel_group(with_context_parallel=False):
 
 def get_data_parallel_group_gloo(with_context_parallel=False):
     """Get the data parallel group-gloo the caller rank belongs to."""
-    return _DATA_PARALLEL_GROUP_GLOO
+    # return _DATA_PARALLEL_GROUP_GLOO
     if with_context_parallel:
         assert (
             _DATA_PARALLEL_GROUP_WITH_CP_GLOO is not None

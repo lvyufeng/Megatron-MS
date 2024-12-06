@@ -2541,7 +2541,7 @@ def _object_to_tensor(obj, device, group):
     f = io.BytesIO()
     _pickler(f).dump(obj)
     byte_data = f.getvalue()
-    byte_tensor = torch.Tensor(torch.Tensor.convert_bytes_to_tensor(byte_data, (len(byte_data),), torch.uint8))
+    byte_tensor = torch.Tensor(torch.Tensor.convert_bytes_to_tensor(byte_data, (len(byte_data),), torch.int8))
     # Do not replace `torch.ByteTensor` or `torch.LongTensor` with torch.tensor and specifying dtype.
     # Otherwise, it will casue 100X slowdown.
     # See: https://github.com/pytorch/pytorch/issues/65696
@@ -2632,7 +2632,7 @@ def all_gather_object(object_list, obj, group=None):
         input_tensor = torch.concat([input_tensor, torch.zeros(max_object_size - input_tensor.shape[0], dtype=input_tensor.dtype)])
 
     coalesced_output_tensor = torch.empty(
-        max_object_size * group_size, dtype=torch.uint8
+        max_object_size * group_size, dtype=torch.int8
     )
     # Output tensors are nonoverlapping views of coalesced_output_tensor
     output_tensors = [
@@ -2642,7 +2642,7 @@ def all_gather_object(object_list, obj, group=None):
     output_tensors, _ = all_gather(output_tensors, input_tensor, group=group)
     # Deserialize outputs back to object.
     for i, tensor in enumerate(output_tensors):
-        tensor = tensor.type(torch.uint8)
+        tensor = tensor.type(torch.int8)
         tensor_size = object_size_list[i]
         object_list[i] = _tensor_to_object(tensor, tensor_size, group)
 
@@ -2728,8 +2728,6 @@ def gather_object(
     _validate_output_list_for_rank(my_global_rank, global_dst, object_gather_list)
     # current_device = _get_object_coll_device(group)
     input_tensor, local_size = _object_to_tensor(obj, None, group)
-    print(input_tensor.shape)
-    print(input_tensor)
     # Gather all local sizes. This is so that we can find the max size, and index
     # until the correct size when deserializing the tensors.
     group_size = get_world_size(group=group)
@@ -2744,16 +2742,14 @@ def gather_object(
     # size.
     object_size_list, _ = all_gather(object_size_list, local_size, group=group)
     max_object_size = int(max(object_size_list).item())  # type: ignore[type-var]
-    print(max_object_size, object_size_list)
     # Resize tensor to max size across all ranks.
     if max_object_size - input_tensor.shape[0] > 0:
         input_tensor = torch.concat([input_tensor, torch.zeros(max_object_size - input_tensor.shape[0], dtype=input_tensor.dtype)])
 
-    print(input_tensor)
     # Avoid populating output tensors if the result won't be gathered on this rank.
     if my_global_rank == global_dst:
         coalesced_output_tensor = torch.empty(
-            max_object_size * group_size, dtype=torch.uint8
+            max_object_size * group_size, dtype=torch.int8
         )
         # Output tensors are nonoverlapping views of coalesced_output_tensor
         output_tensors = [
@@ -2770,12 +2766,9 @@ def gather_object(
     if my_global_rank != global_dst:
         return
 
-    print(input_tensor)
     assert object_gather_list is not None, "Must provide object_gather_list on dst rank"
     for i, tensor in enumerate(output_tensors):
-        print(tensor)
-        print(tensor.shape)
-        tensor = tensor.type(torch.uint8)
+        tensor = tensor.type(torch.int8)
         tensor_size = object_size_list[i]
         object_gather_list[i] = _tensor_to_object(tensor, tensor_size, group)
 
@@ -2963,7 +2956,7 @@ def recv_object_list(
     # Tensor to receive serialized objects into.
     object_tensor = torch.empty(  # type: ignore[call-overload]
         torch.sum(object_sizes_tensor).item(),  # type: ignore[arg-type]
-        dtype=torch.uint8,
+        dtype=torch.int8,
         device=current_device,
     )
 
@@ -2975,7 +2968,7 @@ def recv_object_list(
     offset = 0
     for i, obj_size in enumerate(object_sizes_tensor):
         obj_view = object_tensor[offset : offset + obj_size]
-        obj_view = obj_view.type(torch.uint8)
+        obj_view = obj_view.type(torch.int8)
         offset += obj_size
         object_list[i] = _tensor_to_object(obj_view, obj_size, group)
     return rank_objects
@@ -3092,7 +3085,7 @@ def broadcast_object_list(
     else:
         object_tensor = torch.empty(  # type: ignore[call-overload]
             torch.sum(object_sizes_tensor).item(),  # type: ignore[arg-type]
-            dtype=torch.uint8,
+            dtype=torch.int8,
             device=current_device,
         )
 
@@ -3102,7 +3095,7 @@ def broadcast_object_list(
     if my_global_rank != global_src:
         for i, obj_size in enumerate(object_sizes_tensor):
             obj_view = object_tensor[offset : offset + obj_size]
-            obj_view = obj_view.type(torch.uint8)
+            obj_view = obj_view.type(torch.int8)
             offset += obj_size
             object_list[i] = _tensor_to_object(obj_view, obj_size, group)
 
@@ -3205,26 +3198,29 @@ def scatter_object_list(
         # Src rank broadcasts the maximum tensor size. This is because all ranks are
         # expected to call into scatter() with equal-sized tensors.
         max_tensor_size = max(tensor_sizes)  # type: ignore[possibly-undefined]
-        for tensor in tensor_list:  # type: ignore[possibly-undefined]
-            tensor.resize_(max_tensor_size)
+        for i in range(len(tensor_list)):  # type: ignore[possibly-undefined]
+            # tensor.resize_(max_tensor_size)
+            tensor = tensor_list[i]
+            if max_tensor_size - tensor.shape[0] > 0:
+                tensor = torch.concat([tensor, torch.zeros(max_tensor_size.item() - tensor.shape[0], dtype=tensor.dtype)])
+            tensor_list[i] = tensor
     else:
         max_tensor_size = torch.tensor([0], dtype=torch.long)
     max_tensor_size = broadcast(max_tensor_size, src=global_src, group=group)
 
     # Scatter actual serialized objects
     output_tensor = torch.empty(
-        max_tensor_size.item(), dtype=torch.uint8
+        max_tensor_size.item(), dtype=torch.int8
     )
-    scatter(
+    output_tensor = scatter(
         output_tensor,
         scatter_list=None if my_global_rank != global_src else tensor_list,  # type: ignore[possibly-undefined]
         src=global_src,
         group=group,
     )
-
     # Scatter per-object sizes to trim tensors when deserializing back to object
     obj_tensor_size = torch.tensor([0], dtype=torch.int32)
-    scatter(
+    obj_tensor_size = scatter(
         obj_tensor_size,
         scatter_list=None if my_global_rank != global_src else tensor_sizes,  # type: ignore[possibly-undefined]
         src=global_src,
@@ -3607,7 +3603,8 @@ def gather(
     input_tensors = [tensor]
 
     opts = GatherOptions()
-    opts.rootRank = group_dst
+    opts.rootRank = global_dst
+    opts.groupRank = group_dst
     output_list = group.gather(output_tensors, input_tensors, opts)
 
     # if async_op:
@@ -3711,14 +3708,15 @@ def scatter(
         output_tensors = [tensor]
 
     opts = ScatterOptions()
-    opts.rootRank = group_src
+    opts.rootRank = global_src
+    opts.groupRank = group_src
     opts.asyncOp = async_op
-    work = group.scatter(output_tensors, input_tensors, opts)
-
-    if async_op:
-        return work
-    else:
-        work.wait()
+    out = group.scatter(output_tensors, input_tensors, opts)
+    return out
+    # if async_op:
+    #     return work
+    # else:
+    #     work.wait()
 
 
 @_exception_logger

@@ -126,7 +126,7 @@ class Distribution:
     def arg_constraints(self) -> Dict[str, constraints.Constraint]:
         """
         Returns a dictionary from argument names to
-        :class:`~mindnlp.core.distributions.constraints.Constraint` objects that
+        :class:`~torch.distributions.constraints.Constraint` objects that
         should be satisfied by each argument of this distribution. Args that
         are not tensors need not appear in this dict.
         """
@@ -135,7 +135,7 @@ class Distribution:
     @property
     def support(self) -> Optional[Any]:
         """
-        Returns a :class:`~mindnlp.core.distributions.constraints.Constraint` object
+        Returns a :class:`~torch.distributions.constraints.Constraint` object
         representing this distribution's support.
         """
         raise NotImplementedError

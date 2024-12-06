@@ -18,9 +18,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse  # noqa: F401
 from urllib.request import Request, urlopen
 from typing_extensions import deprecated
-
-from mindnlp import core
-
+from .serialization import load
 
 class _Faketqdm:  # type: ignore[no-redef]
     def __init__(self, total=None, disable=False, **kwargs):
@@ -806,7 +804,7 @@ def _legacy_zip_load(
         f.extractall(model_dir)
         extraced_name = members[0].filename
         extracted_file = os.path.join(model_dir, extraced_name)
-    return core.load(
+    return load(
         extracted_file, weights_only=weights_only
     )
 

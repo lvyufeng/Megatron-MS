@@ -291,26 +291,26 @@ def _init_state_dict(state_dict: Dict[str, Any]) -> Any:
     Initializes meta tensor if the meta tensor is DTensor or torch.Tensor.
     """
 
-    def dtensor_func(value: DTensor):
-        device = getattr(value, "device", None)
-        if device == torch.device("meta"):
-            device_type = dist.distributed_c10d._get_pg_default_device().type
-            device = cast(
-                torch.device, _get_device_module(device_type).current_device()
-            )
-            new_local_tensor = torch.empty_like(value.to_local(), device=device)
-            # We need to pass shape and stride explicitly, since DTensor might be
-            # sharded unevenly.
-            dtensor = DTensor.from_local(
-                new_local_tensor,
-                device_mesh=value.device_mesh,
-                placements=value.placements,
-                shape=value.size(),
-                stride=value.stride(),
-            )
-            return dtensor
-        else:
-            return value
+    # def dtensor_func(value: DTensor):
+    #     device = getattr(value, "device", None)
+    #     if device == torch.device("meta"):
+    #         device_type = dist.distributed_c10d._get_pg_default_device().type
+    #         device = cast(
+    #             torch.device, _get_device_module(device_type).current_device()
+    #         )
+    #         new_local_tensor = torch.empty_like(value.to_local(), device=device)
+    #         # We need to pass shape and stride explicitly, since DTensor might be
+    #         # sharded unevenly.
+    #         dtensor = DTensor.from_local(
+    #             new_local_tensor,
+    #             device_mesh=value.device_mesh,
+    #             placements=value.placements,
+    #             shape=value.size(),
+    #             stride=value.stride(),
+    #         )
+    #         return dtensor
+    #     else:
+    #         return value
 
     def sharded_tensor_func(value: Any):
         device = getattr(value, "device", None)
@@ -335,7 +335,7 @@ def _init_state_dict(state_dict: Dict[str, Any]) -> Any:
 
     _iterate_state_dict(
         state_dict,
-        dtensor_func,
+        # dtensor_func,
         sharded_tensor_func,
         tensor_func,
     )
@@ -343,7 +343,7 @@ def _init_state_dict(state_dict: Dict[str, Any]) -> Any:
 
 def _iterate_state_dict(
     iter_object: Any,
-    dtensor_func: Callable,
+    # dtensor_func: Callable,
     sharded_tensor_func: Callable,
     tensor_func: Callable,
 ):
@@ -361,9 +361,10 @@ def _iterate_state_dict(
     so we don't need to have two versions of _iterate_state_dict.
     """
 
-    if isinstance(iter_object, DTensor):
-        return dtensor_func(iter_object)
-    elif isinstance(iter_object, ShardedTensor):
+    # if isinstance(iter_object, DTensor):
+    #     return dtensor_func(iter_object)
+    # el
+    if isinstance(iter_object, ShardedTensor):
         return sharded_tensor_func(iter_object)
     elif isinstance(iter_object, torch.Tensor):
         return tensor_func(iter_object)
@@ -375,12 +376,12 @@ def _iterate_state_dict(
     elif isinstance(iter_object, dict):
         for key, value in iter_object.items():
             iter_object[key] = _iterate_state_dict(
-                value, dtensor_func, sharded_tensor_func, tensor_func
+                value, sharded_tensor_func, tensor_func
             )
         return iter_object
     elif isinstance(iter_object, (list, tuple)):
         ret = [
-            _iterate_state_dict(v, dtensor_func, sharded_tensor_func, tensor_func)
+            _iterate_state_dict(v, sharded_tensor_func, tensor_func)
             for v in iter_object
         ]
         if isinstance(iter_object, tuple):

@@ -49,7 +49,7 @@ class Transform:
     """
     Abstract class for invertable transformations with computable log
     det jacobians. They are primarily used in
-    :class:`mindnlp.core.distributions.TransformedDistribution`.
+    :class:`torch.distributions.TransformedDistribution`.
 
     Caching is useful for transforms whose inverses are either expensive or
     numerically unstable. Note that care must be taken with memoized values
@@ -74,9 +74,9 @@ class Transform:
             the latest single value is cached. Only 0 and 1 are supported.
 
     Attributes:
-        domain (:class:`~mindnlp.core.distributions.constraints.Constraint`):
+        domain (:class:`~torch.distributions.constraints.Constraint`):
             The constraint representing valid inputs to this transform.
-        codomain (:class:`~mindnlp.core.distributions.constraints.Constraint`):
+        codomain (:class:`~torch.distributions.constraints.Constraint`):
             The constraint representing valid outputs to this transform
             which are inputs to the inverse transform.
         bijective (bool): Whether this transform is bijective. A transform

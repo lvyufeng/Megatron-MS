@@ -37,14 +37,14 @@ class TransformedDistribution(Distribution):
         logistic = TransformedDistribution(base_distribution, transforms)
 
     For more examples, please look at the implementations of
-    :class:`~mindnlp.core.distributions.gumbel.Gumbel`,
-    :class:`~mindnlp.core.distributions.half_cauchy.HalfCauchy`,
-    :class:`~mindnlp.core.distributions.half_normal.HalfNormal`,
-    :class:`~mindnlp.core.distributions.log_normal.LogNormal`,
-    :class:`~mindnlp.core.distributions.pareto.Pareto`,
-    :class:`~mindnlp.core.distributions.weibull.Weibull`,
-    :class:`~mindnlp.core.distributions.relaxed_bernoulli.RelaxedBernoulli` and
-    :class:`~mindnlp.core.distributions.relaxed_categorical.RelaxedOneHotCategorical`
+    :class:`~torch.distributions.gumbel.Gumbel`,
+    :class:`~torch.distributions.half_cauchy.HalfCauchy`,
+    :class:`~torch.distributions.half_normal.HalfNormal`,
+    :class:`~torch.distributions.log_normal.LogNormal`,
+    :class:`~torch.distributions.pareto.Pareto`,
+    :class:`~torch.distributions.weibull.Weibull`,
+    :class:`~torch.distributions.relaxed_bernoulli.RelaxedBernoulli` and
+    :class:`~torch.distributions.relaxed_categorical.RelaxedOneHotCategorical`
     """
     arg_constraints: Dict[str, constraints.Constraint] = {}
 

@@ -25,7 +25,7 @@ from typing import (
 from typing_extensions import ParamSpec, Self, TypeAlias
 
 import mindspore
-from mindnlp.core.nn import Parameter
+from torch.nn import Parameter
 from .. import ops
 from ..utils import get_default_dtype, hooks
 from ..utils.hooks import RemovableHandle

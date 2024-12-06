@@ -6,7 +6,7 @@ from mindspore import nn
 from mindspore.ops.composite import GradOperation
 from mindspore.ops import stop_gradient
 from mindspore.common.api import _pynative_executor
-from mindnlp.configs import GENERATOR_SEED
+from ..configs import GENERATOR_SEED
 
 grad_ = GradOperation(False, True, False)
 grad_sens_ = GradOperation(False, True, True)

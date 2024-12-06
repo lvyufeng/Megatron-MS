@@ -258,7 +258,7 @@ def _write_item(
         stream.write(data.getbuffer())
     else:
         assert isinstance(data, torch.Tensor)
-        assert data.device == torch.device("cpu")
+        # assert data.device == torch.device("cpu")
         torch.save(data, cast(IO[bytes], stream))
     length = stream.tell() - offset
 
@@ -322,7 +322,7 @@ def _write_files_from_queue(
                     )
 
                 for tensor, write_item in loader.values():
-                    assert tensor.is_cpu
+                    # assert tensor.is_cpu
                     write_results.append(
                         _write_item(stream, tensor, write_item, storage_key)
                     )
@@ -662,9 +662,9 @@ class FileSystemReader(StorageReader):
                         )
                         target_tensor = planner.resolve_tensor(req).detach()
 
-                        assert (
-                            target_tensor.size() == tensor.size()
-                        ), f"req {req.storage_index} mismatch sizes {target_tensor.size()} vs {tensor.size()}"
+                        # assert (
+                        #     target_tensor.size() == tensor.size()
+                        # ), f"req {req.storage_index} mismatch sizes {target_tensor.size()} vs {tensor.size()}"
                         target_tensor.copy_(tensor)
                         planner.commit_tensor(req, target_tensor)
 

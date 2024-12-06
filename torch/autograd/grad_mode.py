@@ -14,7 +14,7 @@
 # ============================================================================
 """core module"""
 from mindspore.common.api import _pynative_executor
-from mindnlp.core.utils._contextlib import _NoParamDecoratorContextManager
+from torch.utils._contextlib import _NoParamDecoratorContextManager
 
 class no_grad(_NoParamDecoratorContextManager):
     """

@@ -219,7 +219,7 @@ def mcore_to_pyt_state_dict(
                 else:
                     raise CheckpointingException(f'`data` attr is None for {sh_ten}')
             else:
-                sh_ten.data = sh_ten.data
+                sh_ten.data = sh_ten.data.cpu()
                 if sh_ten.allow_shape_mismatch and is_loading:
                     sh_ten.data.zero_()
 

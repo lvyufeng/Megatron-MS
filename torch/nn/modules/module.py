@@ -587,7 +587,7 @@ class Module:
         elif params is not None and name in params:
             if value is not None:
                 raise TypeError(f"cannot assign '{type(value)}' as parameter '{name}' "
-                                "(mindnlp.core.nn.Parameter or None expected)"
+                                "(torch.nn.Parameter or None expected)"
                                 )
             self.register_parameter(name, value)
         else:

@@ -2,6 +2,8 @@ import copy
 import mindspore
 from mindspore import Tensor, ops
 from mindspore.common._stub_tensor import StubTensor
+from mindspore._c_expression import Tensor as Tensor_
+from ._utils import _rebuild_tensor_v2
 
 def numel(self):
     return ops.size(self)
@@ -72,3 +74,30 @@ def div_(self, value, *, rounding_mode=None):
 
 Tensor.div_ = div_
 StubTensor.div_ = div_
+
+def __reduce_ex__(self, protocol):
+    if isinstance(self, StubTensor):
+        data = Tensor_(self.stub_sync())
+    else:
+        data = Tensor_(self)
+    storage_offset = 0
+    size = data._shape
+    stride = data.stride()
+    requires_grad = False
+    args = (data, storage_offset, size, stride, requires_grad, None, None)
+    return (
+        _rebuild_from_type_v2, (_rebuild_tensor_v2, type(self), args, None))
+
+
+Tensor.__reduce_ex__ = __reduce_ex__
+StubTensor.__reduce_ex__ = __reduce_ex__
+
+def _rebuild_from_type_v2(func, new_type, args, state):
+    ret = func(*args)
+    return ret
+
+def detach(self):
+    return self
+
+Tensor.detach = detach
+StubTensor.detach = detach

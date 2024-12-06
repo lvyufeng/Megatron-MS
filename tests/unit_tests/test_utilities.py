@@ -28,7 +28,7 @@ class Utils:
             torch.distributed.destroy_process_group()
 
         if rank is None:
-            Utils.rank = int(os.environ['LOCAL_RANK'])
+            # Utils.rank = int(os.environ['LOCAL_RANK'])
             if Utils.rank >= Utils.world_size:
                 Utils.rank = -1
         else:

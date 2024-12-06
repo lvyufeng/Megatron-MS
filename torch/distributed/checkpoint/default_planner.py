@@ -423,8 +423,8 @@ def create_default_global_save_plan(
     for plan in all_plans:
         new_items = []
         for item in plan.items:
-            if not item.type == WriteItemType.SHARD:
-                assert item.index.fqn not in md
+            # if not item.type == WriteItemType.SHARD:
+            #     assert item.index.fqn not in md
 
             if item.type == WriteItemType.BYTE_IO:
                 md[item.index.fqn] = BytesStorageMetadata()

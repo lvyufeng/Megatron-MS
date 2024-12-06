@@ -1,5 +1,20 @@
+import mindspore
 from mindspore import Tensor
 from .ops import empty, narrow
+
+
+element_size_map = {
+    mindspore.float16: 2,
+    mindspore.float32: 3,
+    mindspore.bfloat16: 2,
+    mindspore.int64: 4,
+    mindspore.uint8: 1,
+    mindspore.int8: 1,
+    mindspore.bool_: 1
+}
+
+def _element_size(dtype):
+    return element_size_map[dtype]
 
 def _flatten_dense_tensors(tensors):
     """Flatten dense tensors into a contiguous 1D buffer. Assume tensors are of
@@ -41,3 +56,14 @@ def _unflatten_dense_tensors(flat, tensors):
             outputs.append(narrow(flat, 0, offset, numel).view(tensor.shape))
             offset += numel
     return outputs
+
+def _rebuild_tensor_v2(
+    storage,
+    storage_offset,
+    size,
+    stride,
+    requires_grad,
+    backward_hooks,
+    metadata=None,
+):
+    pass

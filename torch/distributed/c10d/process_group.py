@@ -3,7 +3,7 @@ from torch import Tensor
 from typing import List, Optional, Dict, Any
 from enum import Enum
 import time
-from mindspore.communication.comm_func import barrier, broadcast, reduce
+from mindspore.communication.comm_func import barrier, broadcast, reduce, gather_into_tensor, scatter_tensor
 from mindspore.ops.auto_generate.gen_ops_prim import (inner_comm_all_reduce_op, inner_comm_all_gather_op,
                                                       inner_comm_all_to_all_v_op, inner_comm_irecv_op,
                                                       inner_comm_isend_op, inner_comm_reduce_scatter_op)
@@ -140,29 +140,28 @@ class ProcessGroup:
         return out
 
     def gather(self, output_tensors, input_tensors, opts):
-        # do not use mindspore.communication.gather because not support uint8
-        tensor = input_tensors[0]
-        new_tensor, handle = inner_comm_all_gather_op(tensor, self._size, self._name)
+        # # do not use mindspore.communication.gather because not support uint8
+        # tensor = input_tensors[0]
+        # new_tensor, handle = inner_comm_all_gather_op(tensor, self._size, self._name)
 
-        if self._rank == opts.rootRank:
+        # if self._rank == opts.rootRank:
+        #     new_tensor_list = torch.chunk(new_tensor, len(output_tensors[0]))
+        #     return new_tensor_list
+        new_tensor = gather_into_tensor(input_tensors[0], opts.rootRank, self._name)
+        if self._rank == opts.groupRank:
             new_tensor_list = torch.chunk(new_tensor, len(output_tensors[0]))
             return new_tensor_list
+
         return []
 
     def scatter(self, output_tensors: List[Tensor], input_tensors: List[List[Tensor]], opts: Any) -> Any:
-        op = get_backend_op("c10d::scatter_")
-        work = op.call(
-            output_tensors,
-            input_tensors,
-            self,
-            opts.root_rank,
-            opts.async_op,
-            opts.timeout
-        )
-        if allow_inflight_collective_as_graph_input():
-            for tensor in output_tensors:
-                register_work(tensor, work)
-        return work
+        output_tensor = output_tensors[0]
+        if self._rank == opts.groupRank:
+            input_tensor = torch.concat(input_tensors[0])
+        else:
+            input_tensor = torch.zeros(output_tensor.shape[0] * self._size, dtype=output_tensor.dtype)
+        out = scatter_tensor(input_tensor, opts.rootRank, self._name)
+        return out
 
     def reduce_scatter(self, output_tensors: List[Tensor], input_tensors: List[List[Tensor]], opts: Any) -> Any:
         op = get_backend_op("c10d::reduce_scatter_")

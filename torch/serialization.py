@@ -38,6 +38,7 @@ from typing import Dict, Union, Optional, Any, OrderedDict
 from functools import reduce
 from dataclasses import dataclass
 
+import mindspore._c_expression
 import numpy as np
 import mindspore
 from mindspore import Tensor
@@ -47,8 +48,8 @@ import safetensors
 import safetensors.numpy
 from safetensors import deserialize
 
-from mindnlp.core.nn import Parameter
-from mindnlp.configs import SUPPORT_BF16
+from torch.nn import Parameter
+from .configs import SUPPORT_BF16
 from .nn import Module
 
 
@@ -938,6 +939,16 @@ dtype_map = {
     'BoolStorage': np.bool_
 }
 
+storage_map = {
+    mindspore.float16: "HalfStorage",
+    mindspore.float32: "FloatStorage",
+    mindspore.bfloat16: 'BFloat16Storage',
+    mindspore.int64: 'LongStorage',
+    mindspore.int32: 'IntStorage',
+    mindspore.uint8: 'ByteStorage',
+    mindspore.bool_: 'BoolStorage' 
+}
+
 element_size_map = {
     "HalfStorage": 2,
     "FloatStorage": 3,
@@ -947,7 +958,7 @@ element_size_map = {
     'BoolStorage': 1
 }
 
-def load(f, pickle_module=pickle, *, mmap=None, **pickle_load_args):
+def load(f, map_location=None, pickle_module=pickle, *, weights_only=False, mmap=None, **pickle_load_args):
     """
     Load a file using pickle, optionally with memory mapping.
     
@@ -1288,25 +1299,76 @@ def _check_save_filelike(f):
             "expected 'f' to be string, path, or a file-like object with "
             "a 'write' attribute")
 
-def save(obj, f, pickle_module = pickle, pickle_protocol = 2):
+def save(obj, f, pickle_module = pickle, pickle_protocol = 2, _disable_byteorder_record: bool = False):
     _check_save_filelike(f)
     with _open_zipfile_writer(f) as opened_zipfile:
-        _save(obj, opened_zipfile, pickle_module, pickle_protocol)
+        _save(
+            obj,
+            opened_zipfile,
+            pickle_module,
+            pickle_protocol,
+            _disable_byteorder_record,
+        )
+        return
 
-def _save(obj, zip_file, pickle_module, pickle_protocol):
+def _save(
+    obj,
+    zip_file,
+    pickle_module,
+    pickle_protocol,
+    _disable_byteorder_record,
+):
     serialized_storages = {}
+    id_map: Dict[int, str] = {}
 
+    # Since loading storages that view the same data with different dtypes is
+    # not supported, we need to keep track of the dtype associated with each
+    # storage data_ptr and throw an error if the dtype is ever different.
+    # TODO: This feature could be added in the future
+    storage_dtypes = {}
+
+    def persistent_id(obj):
+        # FIXME: the docs say that persistent_id should only return a string
+        # but torch store returns tuples. This works only in the binary protocol
+        # see
+        # https://docs.python.org/2/library/pickle.html#pickling-and-unpickling-external-objects
+        # https://github.com/python/cpython/blob/master/Lib/pickle.py#L527-L537
+
+        if isinstance(obj, mindspore._c_expression.Tensor) and not isinstance(obj, mindspore.Tensor):
+            storage_type = storage_map[obj.dtype]
+            storage_numel = obj._size
+
+            storage_key = id_map.setdefault(id(obj), str(len(id_map)))
+            serialized_storages[storage_key] = obj
+            location = 'cpu'
+
+            return ("storage", storage_type, storage_key, location, storage_numel)
+
+        return None
+
+    # Write the pickle data for `obj`
     data_buf = io.BytesIO()
     pickler = pickle_module.Pickler(data_buf, protocol=pickle_protocol)
+    pickler.persistent_id = persistent_id
     pickler.dump(obj)
     data_value = data_buf.getvalue()
-    zip_file.write_record('archive/data.pkl', data_value, len(data_value))
+    zip_file.write_record("archive/data.pkl", data_value, len(data_value))
+    zip_file.write_record("archive/version", bytes(str(3), encoding='utf-8'))
 
+    # Write byte order marker
+    if not _disable_byteorder_record:
+        if sys.byteorder not in ["little", "big"]:
+            raise ValueError("Unknown endianness type: " + sys.byteorder)
+
+        zip_file.write_record("archive/byteorder", sys.byteorder, len(sys.byteorder))
+
+    # Write each tensor to a file named tensor/the_tensor_key in the zip archive
     for key in sorted(serialized_storages.keys()):
-        name = f'archive/data/{key}'
-        storage = serialized_storages[key]
-        storage_data = storage.inner_data
-        zip_file.write_record(name, storage_data)
+        name = f"archive/data/{key}"
+        storage = serialized_storages[key].get_bytes()
+        num_bytes = len(storage)
+        zip_file.write_record(name, storage, num_bytes)
+
 
 _MS_TYPES = {
     "F64": mindspore.float64,

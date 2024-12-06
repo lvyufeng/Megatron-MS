@@ -718,7 +718,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         data_parallel_global_ranks = torch.distributed.get_process_group_ranks(
             self.data_parallel_group_gloo
         )
-
         # Collect param states.
         state = {
             "per_bucket_numel": self.per_bucket_numel,
@@ -776,13 +775,12 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                             recv_tensors = None
 
                         # Gather.
-                        torch.distributed.gather(
+                        recv_tensors = torch.distributed.gather(
                             send_tensor,
                             recv_tensors,
                             data_parallel_global_ranks[0],
                             data_parallel_group_gloo,
                         )
-
                         # Concatenate.
                         if data_parallel_rank == 0:
                             if key not in world_tensors:
