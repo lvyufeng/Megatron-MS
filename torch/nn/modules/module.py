@@ -12,7 +12,7 @@ from mindspore import Tensor
 from mindspore.common._stub_tensor import StubTensor
 from mindspore.common.dtype import Float
 
-from mindnlp.configs import ON_ORANGE_PI, set_pyboost
+from ...configs import ON_ORANGE_PI, set_pyboost
 from ..parameter import Parameter
 from ...utils import hooks
 from ...utils.hooks import RemovableHandle

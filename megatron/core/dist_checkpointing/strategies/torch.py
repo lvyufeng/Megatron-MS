@@ -414,7 +414,6 @@ class TorchDistSaveShardedStrategy(SaveShardedStrategy):
             sharded_state_dict, self.keep_only_main_replica
         )
         pyt_state_dict = mcore_to_pyt_state_dict(sharded_state_dict, False)
-
         # Using async infrastructure for sync save
         writer = FileSystemWriterAsync(checkpoint_dir, thread_count=self.thread_count)
         self.save_state_dict_ret = save_state_dict_async_plan(

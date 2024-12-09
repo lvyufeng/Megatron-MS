@@ -227,14 +227,14 @@ def _load_state_dict(
         return all_local_plans
 
     central_plan: LoadPlan = distW.reduce_scatter("plan", local_step, global_step)
-
     @_dcp_method_logger(**ckpt_kwargs)
     def read_data():
         assert planner is not None
         final_local_plan = planner.finish_plan(central_plan)
-        all_reads = storage_reader.read_data(final_local_plan, planner)
+        # all_reads = storage_reader.read_data(final_local_plan, planner)
+        storage_reader.read_data(final_local_plan, planner)
 
-        all_reads.wait()
+        # all_reads.wait()
         return None
 
     _ = distW.all_gather("read", read_data)

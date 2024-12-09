@@ -1,7 +1,7 @@
 """fft"""
 from mindspore import ops
 from mindspore.ops._primitive_cache import _get_cache_prim
-from mindnlp.configs import use_pyboost
+from ..configs import use_pyboost
 from .array import narrow
 from ._inner import pad
 

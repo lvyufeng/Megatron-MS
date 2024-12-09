@@ -3,7 +3,7 @@ import numpy as np
 import mindspore
 from mindspore import ops
 from mindspore.ops._primitive_cache import _get_cache_prim
-from mindnlp.configs import use_pyboost, DEVICE_TARGET, GENERATOR_SEED
+from ..configs import use_pyboost, DEVICE_TARGET, GENERATOR_SEED
 from .other import cumsum, searchsorted
 from .comparison import topk
 from .pointwise import div, log

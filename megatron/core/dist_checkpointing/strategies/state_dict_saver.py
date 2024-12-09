@@ -114,7 +114,6 @@ def save_state_dict_async_finalize(
     Returns: None
     """
     write_results = storage_writer.retrieve_write_results()
-
     # Gather the write results that will be saved to the metadata file.
     gather_start = time()
     all_results = dist_wrapper.gather_object(write_results)

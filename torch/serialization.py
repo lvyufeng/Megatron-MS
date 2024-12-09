@@ -110,7 +110,14 @@ class PyTorchFileReader:
             zipfile.BadZipFile: If the file specified by the 'file' parameter is not a valid zip file.
             IndexError: If the zip file does not contain any files.
         """
+        
         self.file = zipfile.ZipFile(file)
+        if hasattr(file, 'offset'):
+            file.seek(0)
+            bytes = file.read(file.len)
+            bytes = io.BytesIO(bytes)
+            self.file = zipfile.ZipFile(bytes)
+
         self.directory = self.file.namelist()[0].split('/')[0]
 
     def open_record(self, name):
@@ -148,7 +155,7 @@ class PyTorchFileReader:
         Raises:
             FileNotFoundError: If the PyTorch file does not exist in the specified directory.
             IOError: If there is an error in reading the PyTorch file.
-        
+
         """
         filename = f"{self.directory}/{name}"
         if filename in self.file.namelist():
@@ -1337,7 +1344,6 @@ def _save(
         if isinstance(obj, mindspore._c_expression.Tensor) and not isinstance(obj, mindspore.Tensor):
             storage_type = storage_map[obj.dtype]
             storage_numel = obj._size
-
             storage_key = id_map.setdefault(id(obj), str(len(id_map)))
             serialized_storages[storage_key] = obj
             location = 'cpu'

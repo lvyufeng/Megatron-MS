@@ -12,3 +12,12 @@ SUPPORT_BF16 = GENERATOR_SEED and '910b' in SOC
 ON_ORANGE_PI = '310b' in SOC
 USE_PYBOOST = version.parse(mindspore.__version__) >= version.parse('2.3.0') and DEVICE_TARGET == 'Ascend'
 DEFAULT_DTYPE = mindspore.float32
+
+def set_pyboost(mode: bool):
+    """set global pyboost"""
+    global USE_PYBOOST
+    USE_PYBOOST = mode
+
+def use_pyboost():
+    """set global pyboost"""
+    return USE_PYBOOST

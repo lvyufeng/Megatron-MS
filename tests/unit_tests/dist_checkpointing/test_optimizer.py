@@ -104,8 +104,8 @@ def initialize_gpt_model(pre_process=True, post_process=True, seed=0, **config_k
 def init_mock_args(args):
     args.data_parallel_random_init = False
     args.virtual_pipeline_model_parallel_size = None
-    # args.bf16 = True
-    args.bf16 = False
+    args.bf16 = True
+    # args.bf16 = False
     args.accumulate_allreduce_grads_in_fp32 = False
     args.overlap_grad_reduce = False
     args.use_distributed_optimizer = True
@@ -117,8 +117,8 @@ def setup_model_and_optimizer(seed):
         init_mock_args(mock_args.return_value)
         model = get_model(partial(initialize_gpt_model, seed=seed))
 
-    config = OptimizerConfig(lr=0.001, fp16=True, params_dtype=torch.float16, use_distributed_optimizer=True)
-    # config = OptimizerConfig(bf16=True, params_dtype=torch.bfloat16, use_distributed_optimizer=True)
+    # config = OptimizerConfig(lr=0.001, fp16=True, params_dtype=torch.float16, use_distributed_optimizer=True)
+    config = OptimizerConfig(lr=0.001, bf16=True, params_dtype=torch.bfloat16, use_distributed_optimizer=True)
     optimizer = get_megatron_optimizer(config, model)
 
     torch.manual_seed(seed + 1)
@@ -157,6 +157,8 @@ class TestDistributedOptimizer:
                     # Save checkpoint A
                     Utils.initialize_model_parallel(*tp_pp)
                     model, optimizer_A = setup_model_and_optimizer(seed=2)
+                    print(optimizer_A.state_dict())
+                    print(type(optimizer_A))
                     save(optimizer_A.sharded_state_dict(model[0].sharded_state_dict()), ckpt_dir)
                     optim_param_state_A = optimizer_A.get_parameter_state_dp_zero()
                     Utils.destroy_model_parallel()
@@ -177,6 +179,10 @@ class TestDistributedOptimizer:
                     # Expect a mismatch in values - diffs[2] nonempty
                     if parallel_state.get_data_parallel_rank(with_context_parallel=True) == 0:
                         assert not diffs[0] and not diffs[1] and diffs[2], diffs
+
+                    print('start load')
+                    print(optimizer_B.state_dict())
+                    print(type(optimizer_B))
 
                     optim_state_dict = load(optimizer_B.sharded_state_dict(model[0].sharded_state_dict()), ckpt_dir)
                     optimizer_B.load_state_dict(optim_state_dict)

@@ -2,7 +2,7 @@
 import mindspore
 
 from mindspore import ops
-from mindnlp.configs import use_pyboost, ON_ORANGE_PI
+from ..configs import use_pyboost, ON_ORANGE_PI
 
 # addbmm
 def addbmm(input, batch1, batch2, *, beta=1, alpha=1):

@@ -2,7 +2,7 @@
 import random
 import numpy as np
 import mindspore
-from mindnlp.configs import DEFAULT_DTYPE, GENERATOR_SEED
+from ..configs import DEFAULT_DTYPE, GENERATOR_SEED
 
 def set_default_dtype(dtype):
     """set default dtype"""

@@ -126,7 +126,6 @@ def load(
         )
         merge(common_state_dict, sharded_objects)
     sharded_state_dict, _ = extract_sharded_base(sharded_state_dict)
-
     if validate_access_integrity:
         validate_sharding_integrity(nested_values(sharded_state_dict))
 

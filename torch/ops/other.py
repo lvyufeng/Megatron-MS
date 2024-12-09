@@ -6,7 +6,7 @@ from mindspore import ops
 from mindspore.common.initializer import initializer
 from mindspore.ops._primitive_cache import _get_cache_prim
 
-from mindnlp.configs import use_pyboost, ON_ORANGE_PI
+from ..configs import use_pyboost, ON_ORANGE_PI
 from .reduction import any
 from .comparison import eq
 

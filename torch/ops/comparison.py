@@ -2,7 +2,7 @@
 import numpy as np
 import mindspore
 from mindspore import ops
-from mindnlp.configs import use_pyboost
+from ..configs import use_pyboost
 
 # allclose
 def allclose(input, other, rtol=1e-05, atol=1e-08, equal_nan=False):

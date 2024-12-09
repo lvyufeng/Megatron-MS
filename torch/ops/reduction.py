@@ -2,7 +2,7 @@
 import mindspore
 from mindspore import ops
 from mindspore.ops._primitive_cache import _get_cache_prim
-from mindnlp.configs import use_pyboost, DEVICE_TARGET
+from ..configs import use_pyboost, DEVICE_TARGET
 
 # argmax
 def argmax(input, dim=None, keepdim=False):

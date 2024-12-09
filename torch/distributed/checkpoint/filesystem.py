@@ -28,6 +28,7 @@ from typing import (
     Union,
 )
 
+from mindspore.common._stub_tensor import StubTensor
 import torch
 from torch import Tensor
 # from torch._utils import _get_available_device_type, _get_device_module
@@ -258,10 +259,11 @@ def _write_item(
         stream.write(data.getbuffer())
     else:
         assert isinstance(data, torch.Tensor)
+        if isinstance(data, StubTensor):
+            data = data.stub_sync()
         # assert data.device == torch.device("cpu")
         torch.save(data, cast(IO[bytes], stream))
     length = stream.tell() - offset
-
     return WriteResult(
         index=write_item.index,
         size_in_bytes=length,
@@ -662,15 +664,16 @@ class FileSystemReader(StorageReader):
                         )
                         target_tensor = planner.resolve_tensor(req).detach()
 
-                        # assert (
-                        #     target_tensor.size() == tensor.size()
-                        # ), f"req {req.storage_index} mismatch sizes {target_tensor.size()} vs {tensor.size()}"
+                        assert (
+                            target_tensor.size() == tensor.size()
+                        ), f"req {req.storage_index} mismatch sizes {target_tensor.size()} vs {tensor.size()}"
                         target_tensor.copy_(tensor)
                         planner.commit_tensor(req, target_tensor)
 
-        fut: Future = Future()
-        fut.set_result(None)
-        return fut
+        # fut: Future = Future()
+        # fut.set_result(None)
+        # return fut
+        return None
 
     # Implementing the abstract function in StorageReader
     def read_metadata(self) -> Metadata:

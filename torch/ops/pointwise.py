@@ -1,7 +1,7 @@
 """pointwise op"""
 import mindspore
 from mindspore import ops
-from mindnlp.configs import use_pyboost
+from ..configs import use_pyboost
 
 # abs
 def abs(input):
