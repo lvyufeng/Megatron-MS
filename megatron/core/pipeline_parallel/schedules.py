@@ -4,6 +4,8 @@ import contextlib
 from typing import Callable, Iterator, List, Optional, Union
 
 import torch
+from mindspore.ops import composite as C
+from mindspore.common.api import _pynative_executor
 
 from megatron.core import parallel_state
 from megatron.core.enums import ModelType
@@ -182,10 +184,19 @@ def forward_step(
     set_input_tensor = get_attr_wrapped_model(model, "set_input_tensor")
     set_input_tensor(input_tensor)
 
+    if not parallel_state.is_pipeline_first_stage() and input_tensor is not None:
+        input_tensor[0].retain_grad()
+
+    # run forward
+    num_tokens = torch.tensor(0, dtype=torch.int)
+    if input_tensor[0] is None:
+        input_tensor[0] = num_tokens
     if config.enable_autocast:
         context_manager = torch.autocast("cuda", dtype=config.autocast_dtype)
     else:
         context_manager = contextlib.nullcontext()
+    _pynative_executor.set_grad_flag(True)
+    _pynative_executor.new_graph(forward_step_func, input_tensor[0])
     with context_manager:
         if checkpoint_activations_microbatch is None:
             output_tensor, loss_func = forward_step_func(data_iterator, model)
@@ -203,6 +214,7 @@ def forward_step(
         else:
             data = loss_func(output_tensor, non_loss_data=True)
             forward_data_store.append(data)
+    _pynative_executor.end_graph(forward_step_func, output_tensor, input_tensor[0])
 
     if config.timers is not None:
         config.timers('forward-compute').stop()
@@ -233,7 +245,7 @@ def forward_step(
     return [output_tensor]
 
 
-def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, config):
+def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, config, model):
     """Backward step through passed-in output tensor.
 
     If last stage, output_tensor_grad is None, otherwise gradient of loss
@@ -254,23 +266,26 @@ def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, c
     if not isinstance(input_tensor, list):
         input_tensor = [input_tensor]
         unwrap_input_tensor_grad = True
-    for x in input_tensor:
-        if x is not None:
-            x.retain_grad()
 
     if not isinstance(output_tensor, list):
         output_tensor = [output_tensor]
     if not isinstance(output_tensor_grad, list):
         output_tensor_grad = [output_tensor_grad]
 
-    # Backward pass.
+    # init dout if in last stage
     if output_tensor_grad[0] is None and config.grad_scale_func is not None:
-        output_tensor[0] = config.grad_scale_func(output_tensor[0])
+        output_tensor_grad[0] = config.grad_scale_func(torch.ones_like(output_tensor[0]))
 
-    if config.deallocate_pipeline_outputs:
-        custom_backward(output_tensor[0], output_tensor_grad[0])
-    else:
-        torch.autograd.backward(output_tensor[0], grad_tensors=output_tensor_grad[0])
+    # set input tensor for backpropagation
+    if not parallel_state.is_pipeline_first_stage():
+        model.set_input_tensor(input_tensor[0])
+
+    # run backward
+    grad_ = C.GradOperation(True, True, True)
+    weights = model.trainable_params()
+    _pynative_executor.check_run(grad_, config.forward_step_func, weights, None, input_tensor[0])
+    _pynative_executor.grad(config.forward_step_func, grad_, weights, None, input_tensor[0], output_tensor_grad[0])
+
 
     # Collect the grad of the input_tensor.
     input_tensor_grad = [None]
@@ -339,6 +354,7 @@ def forward_backward_no_pipelining(
         data_iterator = data_iterator[0]
 
     config = get_model_config(model)
+    config.forward_step_func = forward_step_func
     if config.timers is not None:
         config.timers('forward-backward', log_level=1).start(barrier=config.barrier_with_L1_time)
 
@@ -349,7 +365,7 @@ def forward_backward_no_pipelining(
     model_type = get_model_type(model)
 
     forward_data_store = []
-    input_tensor, output_tensor_grad = None, None
+    input_tensor, output_tensor_grad = [None], [None]
     with no_sync_func():
         for i in range(num_microbatches - 1):
             output_tensor = forward_step(
@@ -364,7 +380,7 @@ def forward_backward_no_pipelining(
                 is_first_microbatch=check_first_val_step(first_val_step, forward_only, i == 0),
             )
             if not forward_only:
-                backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, config)
+                backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, config, model)
 
     # Run computation for last microbatch out of context handler (want to
     # synchronize gradients).
@@ -383,7 +399,7 @@ def forward_backward_no_pipelining(
     )
 
     if not forward_only:
-        backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, config)
+        backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, config, model)
 
     if config.timers is not None:
         config.timers('forward-backward').stop()
@@ -1116,6 +1132,7 @@ def forward_backward_pipelining_without_interleaving(
         data_iterator = data_iterator[0]
 
     config = get_model_config(model)
+    config.forward_step_func = forward_step_func
     if config.overlap_p2p_comm:
         raise ValueError(
             "Non-interleaved pipeline parallelism does not support overlapping p2p communication"
@@ -1287,7 +1304,7 @@ def forward_backward_pipelining_without_interleaving(
                     enable_grad_sync()
 
             input_tensor_grad = backward_step(
-                input_tensor, output_tensor, output_tensor_grad, model_type, config
+                input_tensor, output_tensor, output_tensor_grad, model_type, config, model
             )
 
             if last_iteration:
@@ -1317,7 +1334,7 @@ def forward_backward_pipelining_without_interleaving(
             output_tensor_grad = recv_backward(send_tensor_shapes, config)
 
             input_tensor_grad = backward_step(
-                input_tensor, output_tensor, output_tensor_grad, model_type, config
+                input_tensor, output_tensor, output_tensor_grad, model_type, config, model
             )
 
             send_backward(input_tensor_grad, recv_tensor_shapes, config)
