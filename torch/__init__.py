@@ -51,6 +51,7 @@ class device:
     def __init__(self, name):
         pass
 
+from torch import amp as amp
 from . import optim, ops, nn, distributions, cuda, distributed
 from .utils import get_default_dtype, set_default_dtype, manual_seed
 from .autograd import no_grad, enable_grad, value_and_grad
@@ -90,3 +91,5 @@ def set_autocast_dtype(device_type, dtype):
 def get_autocast_dtype(device_type):
     return AUTO_CAST_DTYE[device_type]
 
+def is_autocast_enabled(device_type):
+    return device_type in AUTO_CAST_DTYE.keys()
