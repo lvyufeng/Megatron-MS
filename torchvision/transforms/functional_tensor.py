@@ -11,7 +11,6 @@ import mindspore as ms
 import torch as torch
 from torch import Tensor
 from torch.nn.functional import grid_sample, conv2d, interpolate, pad as torch_pad
-from utils import graph_mode_condition
 
 def _is_tensor_a_torch_image(x: Tensor) -> bool:
     return x.ndim >= 2
@@ -1028,8 +1027,6 @@ def normalize(tensor: Tensor, mean: List[float], std: List[float], inplace: bool
         mean = mean.view(-1, 1, 1)
     if std.ndim == 1:
         std = std.view(-1, 1, 1)
-    if graph_mode_condition() and inplace:
-        raise ValueError("Currently not support inplace on GRAPH mode")
     tensor = tensor.sub_(mean).div_(std) if inplace else tensor.sub(mean).div(std)
     return tensor
 
