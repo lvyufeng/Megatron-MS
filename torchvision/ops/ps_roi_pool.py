@@ -2,7 +2,6 @@ import mindspore as ms
 import torch as torch
 from torch import nn, Tensor
 from torch.nn.modules.utils import _pair
-from torch.tensor import cast_to_ms_tensor, cast_to_adapter_tensor
 
 from ._utils import convert_boxes_to_roi_format, check_roi_boxes_shape
 
@@ -45,8 +44,6 @@ def ps_roi_pool(
         rois = convert_boxes_to_roi_format(rois)
     # output, _ = torch.ops.torchvision.ps_roi_pool(input, rois, spatial_scale, output_size[0], output_size[1])
 
-    input = cast_to_ms_tensor(input)
-    rois = cast_to_ms_tensor(rois)
     if len(input.shape) != 4:
         raise ValueError("The input must be Tensor[N, C, H, W]")
 
@@ -54,7 +51,7 @@ def ps_roi_pool(
     ps_roi_pool = ms.ops.PSROIPooling(spatial_scale, output_size, output_dim)
     output = ps_roi_pool(input, rois)
 
-    return cast_to_adapter_tensor(output)
+    return output
 
 
 class PSRoIPool(nn.Module):

@@ -7,7 +7,6 @@ from torch import nn, Tensor
 from torch.nn import init
 from torch.nn.modules.utils import _pair
 from torch.nn.parameter import Parameter
-from torch.tensor import cast_to_ms_tensor, cast_to_adapter_tensor
 
 
 def deform_conv2d(
@@ -90,10 +89,6 @@ def deform_conv2d(
     out_height = offset.shape[2]
     out_width = offset.shape[3]
     batch = offset.shape[0]
-    input = cast_to_ms_tensor(input)
-    offset = cast_to_ms_tensor(offset)
-    weight = cast_to_ms_tensor(weight)
-    mask = cast_to_ms_tensor(mask)
     offset = offset.reshape((batch, n_offset_grps, weights_h, weights_w, 
             2, out_height, out_width)).transpose((0, 4, 1, 2, 3, 5, 6))
     offset_x, offset_y = ms.ops.split(offset, offset.shape[1] // 2, axis=1)
@@ -104,12 +99,10 @@ def deform_conv2d(
                              1, out_height, out_width)).transpose((0, 4, 1, 2, 3, 5, 6))
     offset = ms.ops.cat((offset_y, offset_x, mask), axis=1).reshape((batch, 3 * n_offset_grps *
             weights_h * weights_w, out_height, out_width))
-    if bias is not None:
-        bias = cast_to_ms_tensor(bias)
 
     output = ms.ops.deformable_conv2d(input, weight, offset, (weights_h, weights_w), (1, 1, stride_h, stride_w),
                                       (pad_h, pad_h, pad_w, pad_w), bias, (1, 1, dil_h, dil_w), n_weight_grps, n_offset_grps)
-    return cast_to_adapter_tensor(output)
+    return output
 
 
 class DeformConv2d(nn.Module):

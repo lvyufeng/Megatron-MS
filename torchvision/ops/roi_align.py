@@ -4,7 +4,6 @@ import mindspore as ms
 import torch as torch
 from torch import nn, Tensor
 from torch.nn.modules.utils import _pair
-from torch.tensor import cast_to_ms_tensor, cast_to_adapter_tensor
 from torch.logging import warning
 from mindspore.ops._primitive_cache import _get_cache_prim
 
@@ -75,11 +74,9 @@ def roi_align(
         raise NotImplementedError("sampling_ratio is not supported negative number.")
 
     roi_align = _get_cache_prim(ms.ops.ROIAlign)(output_size[0], output_size[1], float(spatial_scale), sampling_ratio, roi_end_mode)
-    input = cast_to_ms_tensor(input)
-    rois = cast_to_ms_tensor(rois)
 
     output = roi_align(input, rois)
-    return cast_to_adapter_tensor(output)
+    return output
 
 
 class RoIAlign(nn.Module):

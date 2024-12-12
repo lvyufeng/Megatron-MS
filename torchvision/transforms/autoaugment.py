@@ -7,7 +7,6 @@ from typing import List, Tuple, Optional, Dict
 import torch as torch
 from torch import Tensor
 from mindspore.ops.primitive import _primexpr
-from torch.tensor import cast_to_adapter_tensor
 from .functional import _is_numpy, msvision_mode_mapping
 import mindspore.dataset.vision as msvision
 from collections.abc import Sequence

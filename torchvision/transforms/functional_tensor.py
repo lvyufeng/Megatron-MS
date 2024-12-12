@@ -11,7 +11,6 @@ import mindspore as ms
 import torch as torch
 from torch import Tensor
 from torch.nn.functional import grid_sample, conv2d, interpolate, pad as torch_pad
-from torch.tensor import cast_to_adapter_tensor
 from utils import graph_mode_condition
 
 def _is_tensor_a_torch_image(x: Tensor) -> bool:
@@ -337,13 +336,13 @@ def _rgb2hsv(img: Tensor) -> Tensor:
         img = img.unsqueeze(dim=0)
         # TODO: -> ms.ops.RGBToHSV
         out = ms.ops.operations.image_ops.RGBToHSV()(img)
-        return cast_to_adapter_tensor(out).transpose(3, 1).view(img_shape)
+        return out.transpose(3, 1).view(img_shape)
 
     if img_rank == 4:
         img = img.transpose(1, 3)
         # TODO: -> ms.ops.RGBToHSV
         out = ms.ops.operations.image_ops.RGBToHSV()(img)
-        return cast_to_adapter_tensor(out).transpose(3, 1)
+        return out.transpose(3, 1)
 
 
 def _hsv2rgb(img: Tensor) -> Tensor:
@@ -353,12 +352,12 @@ def _hsv2rgb(img: Tensor) -> Tensor:
         img = img.transpose(0, 2)
         img = img.unsqueeze(dim=0)
         out = ms.ops.HSVToRGB()(img)
-        return cast_to_adapter_tensor(out).transpose(3, 1).view(img_shape)
+        return out.transpose(3, 1).view(img_shape)
 
     if img_rank == 4:
         img = img.transpose(1, 3)
         out = ms.ops.HSVToRGB()(img)
-        return cast_to_adapter_tensor(out).transpose(3, 1)
+        return out.transpose(3, 1)
 
 
 def _pad_symmetric(img: Tensor, padding: List[int]) -> Tensor:
@@ -640,8 +639,8 @@ def _apply_grid_transform(img: Tensor, grid: Tensor, mode: str, fill: Optional[L
         fill_img = torch.tensor(fill, dtype=img.dtype, device=None).view(1, len_fill, 1, 1).expand_as(img)
         if mode == "nearest":
             mask = mask < 0.5
-            # img[mask] = fill_img[mask]
-            img = cast_to_adapter_tensor(ms.numpy.where(mask, x=fill_img, y=img))
+            img[mask] = fill_img[mask]
+            # img = cast_to_adapter_tensor(ms.numpy.where(mask, x=fill_img, y=img))
         else:  # 'bilinear'
             img = img * mask + (1.0 - mask) * fill_img
 
@@ -680,7 +679,6 @@ def _gen_affine_grid(
     base_grid = ms.ops.stack((x_grid, y_grid, z_grid), 3).to(theta.dtype)
     rescaled_theta = theta.transpose(1, 2) / torch.tensor([0.5 * w, 0.5 * h], dtype=theta.dtype, device=None)
     output_grid = base_grid.view(1, oh * ow, 3).bmm(rescaled_theta)
-    output_grid = cast_to_adapter_tensor(output_grid)
     return output_grid.view(1, oh, ow, 2)
 
 
@@ -783,7 +781,6 @@ def _perspective_grid(coeffs: List[float], ow: int, oh: int, dtype, device) -> T
     output_grid2 = base_grid.view(1, oh * ow, 3).bmm(theta2.transpose(1, 2))
 
     output_grid = output_grid1 / output_grid2 - 1.0
-    output_grid = cast_to_adapter_tensor(output_grid)
     return output_grid.view(1, oh, ow, 2)
 
 

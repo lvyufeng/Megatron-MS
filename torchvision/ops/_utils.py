@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple, Union
 import mindspore as ms
 import torch as torch
 from torch import nn, Tensor
-from torch.tensor import cast_to_adapter_tensor
 
 def _cat(tensors: List[Tensor], dim: int = 0) -> Tensor:
     """
@@ -106,7 +105,7 @@ def _loss_inter_union(
         if mask.numel() == 1:
             mask  = True
         out = (xkis2[mask] - xkis1[mask]) * (ykis2[mask] - ykis1[mask])
-        intsctk = cast_to_adapter_tensor(ms.numpy.where(mask, x=out, y=intsctk))
+        intsctk = torch.where(mask, x=out, y=intsctk)
     unionk = (x2 - x1) * (y2 - y1) + (x2g - x1g) * (y2g - y1g) - intsctk
 
     return intsctk, unionk
