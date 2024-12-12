@@ -76,3 +76,17 @@ def tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=Fal
 strided = None
 contiguous_format = None
 preserve_format = None
+
+AUTO_CAST_DTYE = {
+    'cuda': float16,
+    'cpu': bfloat16,
+    'npu': float16
+}
+
+def set_autocast_dtype(device_type, dtype):
+    assert device_type in AUTO_CAST_DTYE.keys(), f'{device_type} is not in {AUTO_CAST_DTYE.keys()}'
+    AUTO_CAST_DTYE[device_type] = dtype
+
+def get_autocast_dtype(device_type):
+    return AUTO_CAST_DTYE[device_type]
+
