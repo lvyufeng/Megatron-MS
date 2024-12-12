@@ -111,7 +111,7 @@ class Function(nn.Cell):
         self.saved_tensors = []
 
     def save_for_backward(self, *args):
-        self.saved_tensors.extend(args)
+        self.saved_tensors.append(args)
 
     def forward(self, *args, **kwargs):
         raise NotImplementedError
