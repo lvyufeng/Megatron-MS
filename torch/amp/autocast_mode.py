@@ -3,6 +3,9 @@ import collections
 import functools
 import warnings
 from typing import Any, Optional
+
+import torch
+
 from mindspore._c_expression.amp import pop_amp_strategy, push_amp_strategy, AmpLevel
 from mindspore.common.dtype import TensorType as _dtype, float32
 from mindspore.train.amp import AMP_WHITE_LIST, AMP_BLACK_LIST
@@ -77,6 +80,7 @@ class autocast:
 def custom_fwd(
     fwd=None,
     *,
+    device_type: str,
     cast_inputs: Optional[_dtype] = None,
 ):
     """
@@ -128,7 +132,7 @@ def custom_fwd(
 # Autograd ensures incoming gradients are the same type as forward outputs.  Allowing a separate
 # cast_inputs argument on custom_bwd is unnecessary and could cause errors if it doesn't match
 # cast_inputs supplied to custom_fwd.
-def custom_bwd(bwd=None):
+def custom_bwd(bwd=None, *, device_type: str):
     """Create a helper decorator for backward methods of custom autograd functions.
 
     Autograd functions are subclasses of :class:`torch.autograd.Function`.
