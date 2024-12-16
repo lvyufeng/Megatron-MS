@@ -53,7 +53,7 @@ class device:
 
 from torch import amp as amp
 from . import optim, ops, nn, distributions, cuda, distributed
-from .utils import get_default_dtype, set_default_dtype, manual_seed
+from .utils import get_default_dtype, set_default_dtype, manual_seed, use_deterministic_algorithms
 from .autograd import no_grad, enable_grad, value_and_grad
 from .serialization import *
 from .ops import *
@@ -70,6 +70,8 @@ long = int64
 int = int32
 float = float32
 bool = bool_
+cfloat = complex64
+cdouble = complex128
 
 def tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=False):
     return Tensor(data, dtype)

@@ -1,6 +1,6 @@
 import torch as torch
 import torch.nn as nn
-from mindtorch import unsupported_attr
+# from mindtorch import unsupported_attr
 from typing import Any, Optional
 from functools import partial
 from ._api import WeightsEnum, Weights

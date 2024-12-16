@@ -4,19 +4,17 @@ import mindspore as ms
 from mindspore.ops._primitive_cache import _get_cache_prim
 import torch as torch
 from torch import Tensor
-from utils import is_under_ascend_context
 
 from ._box_convert import _box_cxcywh_to_xyxy, _box_xyxy_to_cxcywh, _box_xywh_to_xyxy, _box_xyxy_to_xywh
 from ._utils import _upcast
 
 
 def nms(boxes, scores, iou_threshold):
-    if is_under_ascend_context():
-        boxes_size = boxes.shape[0]
-        if boxes_size > 2864:
-            raise ValueError(
-                'For nms, only supports up to 2864 input boxes at a time, please check the configuration.'
-            )
+    boxes_size = boxes.shape[0]
+    if boxes_size > 2864:
+        raise ValueError(
+            'For nms, only supports up to 2864 input boxes at a time, please check the configuration.'
+        )
     scores_keep = scores
     if scores_keep.shape[0] != boxes.shape[0]:
         raise RuntimeError("boxes and scores should have same number of elements in dimension 0, got {} and {}"
@@ -324,7 +322,7 @@ def complete_box_iou(boxes1: Tensor, boxes2: Tensor, eps: float = 1e-7) -> Tenso
 
     v = (4 / (torch.pi ** 2)) * torch.pow(torch.atan(w_pred / h_pred) - torch.atan(w_gt / h_gt), 2)
     # TODO:
-     with torch.no_grad():
+    with torch.no_grad():
         alpha = v / (1 - iou + v + eps)
     # alpha = v / (1 - iou + v + eps)
     # alpha = cast_to_adapter_tensor(ms.ops.stop_gradient(alpha))
