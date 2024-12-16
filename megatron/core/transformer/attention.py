@@ -8,7 +8,7 @@ import torch
 from pkg_resources import packaging
 
 from megatron.core import parallel_state, tensor_parallel
-from megatron.core.models.common.embeddings.rotary_pos_embedding import apply_rotary_pos_emb
+from megatron.core.models.common.embeddings.rotary_pos_embedding import apply_rotary_pos_emb, RoPEClassic
 from megatron.core.parallel_state import (
     get_data_parallel_group,
     get_data_parallel_rank,
@@ -17,6 +17,7 @@ from megatron.core.parallel_state import (
     get_tensor_model_parallel_rank,
     get_tensor_model_parallel_world_size,
 )
+from megatron.core.transformer.custom_layers.transformer_engine import SplitAlongDim
 from megatron.core.transformer.enums import AttnMaskType
 from megatron.core.transformer.identity_op import IdentityFuncOp, IdentityOp
 from megatron.core.transformer.module import MegatronModule
@@ -26,7 +27,7 @@ from megatron.core.utils import divide
 
 from .enums import AttnMaskType
 from .transformer_config import TransformerConfig
-
+from megatron.training import get_args
 
 @dataclass
 class SelfAttentionSubmodules:
@@ -61,7 +62,7 @@ class Attention(MegatronModule, ABC):
         attention_type: str,
     ):
         super().__init__(config=config)
-
+        args = get_args()
         self.config = config
         self.layer_number = layer_number
         self.attn_mask_type = attn_mask_type
@@ -103,6 +104,13 @@ class Attention(MegatronModule, ABC):
             is_expert=False,
             tp_comm_buffer_name='proj',
         )
+
+        if self.config.use_rope:
+            self.use_classic = True
+            self.apply_optimized_rotary_pos_emb = RoPEClassic(self.config.kv_channels, args.max_position_embeddings,
+                                                                  config.params_dtype)
+        else:
+            self.use_classic = False
 
     def _checkpointed_attention_forward(
         self,
@@ -296,6 +304,9 @@ class Attention(MegatronModule, ABC):
             # absolute positional embedding.
             # otherwise, only relative positional embedding takes effect
             # value_layer = apply_rotary_pos_emb(value_layer, k_pos_emb)
+        elif self.use_classic:
+            query = self.apply_optimized_rotary_pos_emb(query)
+            key = self.apply_optimized_rotary_pos_emb(key)
 
         # ==================================
         # core attention computation
@@ -487,8 +498,14 @@ class SelfAttention(Attention):
             self.hidden_size_per_attention_head,
         ]
 
-        # [sq, b, ng, (np/ng + 2) * hn] --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
-        (query, key, value) = torch.split(mixed_qkv, split_arg_list, dim=3,)
+        if SplitAlongDim is not None:
+
+            # [sq, b, ng, (np/ng + 2) * hn] --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
+            (query, key, value) = SplitAlongDim(mixed_qkv, 3, split_arg_list,)
+        else:
+
+            # [sq, b, ng, (np/ng + 2) * hn] --> [sq, b, ng, np/ng * hn], [sq, b, ng, hn], [sq, b, ng, hn]
+            (query, key, value) = torch.split(mixed_qkv, split_arg_list, dim=3,)
 
         # [sq, b, ng, np/ng * hn] -> [sq, b, np, hn]
         query = query.reshape(query.size(0), query.size(1), -1, self.hidden_size_per_attention_head)

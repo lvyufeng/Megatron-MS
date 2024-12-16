@@ -8,7 +8,8 @@ class RMSNorm(torch.nn.Module):
     def __init__(self,
                  dim: int,
                  eps: float = 1e-6,
-                 sequence_parallel: bool = False):
+                 sequence_parallel: bool = False,
+                 scale=1.0):
         """RMS Normaliation module
 
         Args:
@@ -19,7 +20,7 @@ class RMSNorm(torch.nn.Module):
         """
         super().__init__()
         self.eps = eps
-        self.weight = nn.Parameter(torch.ones(dim))
+        self.weight = nn.Parameter(torch.ones(dim) * scale)
 
         setattr(self.weight, 'sequence_parallel', sequence_parallel)
 

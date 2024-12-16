@@ -289,7 +289,7 @@ def initialize_model_parallel(
             group = torch.distributed.new_group(
                 ranks, timeout=timeout, pg_options=get_nccl_options('dp', nccl_comm_cfgs)
             )
-            group_gloo = torch.distributed.new_group(ranks, timeout=timeout)#, backend="gloo")
+            group_gloo = torch.distributed.new_group(ranks, timeout=timeout, backend="gloo")
             if rank in ranks:
                 _DATA_PARALLEL_GROUP = group
                 _DATA_PARALLEL_GROUP_GLOO = group_gloo
@@ -301,7 +301,7 @@ def initialize_model_parallel(
                 ranks_with_cp, timeout=timeout, pg_options=get_nccl_options('dp_cp', nccl_comm_cfgs)
             )
             group_with_cp_gloo = torch.distributed.new_group(
-                ranks_with_cp, timeout=timeout#, backend="gloo"
+                ranks_with_cp, timeout=timeout, backend="gloo"
             )
             if rank in ranks_with_cp:
                 _DATA_PARALLEL_GROUP_WITH_CP = group_with_cp
@@ -514,10 +514,10 @@ def initialize_model_parallel(
             group = torch.distributed.new_group(
                 ranks, timeout=timeout, pg_options=get_nccl_options('dp_modulo_exp', nccl_comm_cfgs)
             )
-            # group_gloo = torch.distributed.new_group(ranks, backend="gloo")
+            group_gloo = torch.distributed.new_group(ranks, backend="gloo")
             if rank in ranks:
                 _DATA_MODULO_EXPERT_PARALLEL_GROUP = group
-                # _DATA_MODULO_EXPERT_PARALLEL_GROUP_GLOO = group_gloo
+                _DATA_MODULO_EXPERT_PARALLEL_GROUP_GLOO = group_gloo
 
     # Initialize global memory buffer
     # This isn't really "parallel state" but there isn't another good place to
@@ -591,7 +591,6 @@ def get_data_parallel_group(with_context_parallel=False):
 
 def get_data_parallel_group_gloo(with_context_parallel=False):
     """Get the data parallel group-gloo the caller rank belongs to."""
-    # return _DATA_PARALLEL_GROUP_GLOO
     if with_context_parallel:
         assert (
             _DATA_PARALLEL_GROUP_WITH_CP_GLOO is not None
@@ -802,12 +801,19 @@ def is_rank_in_embedding_group(ignore_virtual=False):
     if ignore_virtual:
         return rank in _EMBEDDING_GLOBAL_RANKS
     if rank in _EMBEDDING_GLOBAL_RANKS:
-        if rank == _EMBEDDING_GLOBAL_RANKS[0]:
-            return is_pipeline_first_stage(ignore_virtual=False)
-        elif rank == _EMBEDDING_GLOBAL_RANKS[-1]:
-            return is_pipeline_last_stage(ignore_virtual=False)
+        from megatron.training import get_args
+        if get_args().multimodal:
+            if rank == _EMBEDDING_GLOBAL_RANKS[-1]:
+                return is_pipeline_last_stage(ignore_virtual=False)
+            else:
+                return True
         else:
-            return True
+            if rank == _EMBEDDING_GLOBAL_RANKS[0]:
+                return is_pipeline_first_stage(ignore_virtual=False)
+            elif rank == _EMBEDDING_GLOBAL_RANKS[-1]:
+                return is_pipeline_last_stage(ignore_virtual=False)
+            else:
+                return True
     return False
 
 

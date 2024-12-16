@@ -153,7 +153,11 @@ class ParallelMLP(MegatronModule):
         else:
             if bias_parallel is not None:
                 intermediate_parallel = intermediate_parallel + bias_parallel
-            intermediate_parallel = self.activation_func(intermediate_parallel)
+            if self.use_vanilla_activation:
+                alpha = self.fastgelu(self.dense_h_to_4h_2(hidden_states)[0])
+                intermediate_parallel = self.activation_func(intermediate_parallel, alpha)
+            else:
+                intermediate_parallel = self.activation_func(intermediate_parallel)
 
         # [s, b, h]
         output, output_bias = self.dense_4h_to_h(intermediate_parallel)
@@ -817,18 +821,19 @@ class ParallelAttention(MegatronModule):
         return output, bias
 
 
-def bias_dropout_add(x, bias, residual, prob, training):
+def bias_dropout_add(x, bias, residual, prob, training, add_residual=True):
     # type: (Tensor, Optional[Tensor], Tensor, float, bool) -> Tensor
     if bias is not None:
         x = x + bias
     out = torch.nn.functional.dropout(x, p=prob, training=training)
-    out = residual + out
+    if add_residual:
+        out = residual + out
     return out
 
 
 def get_bias_dropout_add(training):
-    def _bias_dropout_add(x, bias, residual, prob):
-        return bias_dropout_add(x, bias, residual, prob, training)
+    def _bias_dropout_add(x, bias, residual, prob, add_residual=True):
+        return bias_dropout_add(x, bias, residual, prob, training, add_residual=add_residual)
     return _bias_dropout_add
 
 
@@ -836,16 +841,18 @@ def get_bias_dropout_add(training):
 def bias_dropout_add_fused_train(x: torch.Tensor,
                                  bias: Optional[torch.Tensor],
                                  residual: torch.Tensor,
-                                 prob: float) -> torch.Tensor:
-    return bias_dropout_add(x, bias, residual, prob, True)
+                                 prob: float,
+                                 add_residual=True) -> torch.Tensor:
+    return bias_dropout_add(x, bias, residual, prob, True,  add_residual=add_residual)
 
 
 @jit_fuser
 def bias_dropout_add_fused_inference(x: torch.Tensor,
                                      bias: Optional[torch.Tensor],
                                      residual: torch.Tensor,
-                                     prob: float) -> torch.Tensor:
-    return bias_dropout_add(x, bias, residual, prob, False)
+                                     prob: float,
+                                     add_residual=True) -> torch.Tensor:
+    return bias_dropout_add(x, bias, residual, prob, False, add_residual=add_residual)
 
 
 class ParallelTransformerLayer(MegatronModule):
@@ -865,6 +872,10 @@ class ParallelTransformerLayer(MegatronModule):
         self.layer_number = layer_number
         self.layer_type = layer_type
 
+        self.use_sandwich_norm = args.use_sandwich_norm
+        self.attn_post_norm_scale = args.attn_post_norm_scale
+        self.ffn_post_norm_scale = args.ffn_post_norm_scale
+        
         self.apply_residual_connection_post_norm \
             = config.apply_residual_connection_post_layernorm
 
@@ -873,6 +884,8 @@ class ParallelTransformerLayer(MegatronModule):
 
         # Normalize the input data.
         self.input_norm = get_norm(config)
+        if self.use_sandwich_norm:
+            self.attn_post_norm = get_norm(config, self.attn_post_norm_scale)
 
         # Self attention.
         self.self_attention = ParallelAttention(
@@ -886,6 +899,8 @@ class ParallelTransformerLayer(MegatronModule):
 
         # Normalize the attention output
         self.post_attention_norm = get_norm(config)
+        if self.use_sandwich_norm:
+            self.ffn_post_norm = get_norm(config, self.ffn_post_norm_scale)
 
         # Cross attention.
         if self.layer_type in (LayerType.decoder,
@@ -903,7 +918,25 @@ class ParallelTransformerLayer(MegatronModule):
         if args.num_experts is not None:
             self.mlp = SwitchMLP(config)
         else:
-            self.mlp = ParallelMLP(config)
+            self.mlp = ParallelMLP(config, layer_number)
+
+        self.use_augs_attention = False
+        if args.augs_attention:
+            if layer_number >= args.augs_attention_start_layer and (
+                    args.augs_attention_end_layer == -1 or layer_number <= args.augs_attention_end_layer):
+                self.use_augs_attention = True
+
+        if self.use_augs_attention:
+            # Augs should be 16 downsample
+            self.attn_linear = torch.nn.Sequential(
+                torch.nn.Linear(config.hidden_size, config.hidden_size // args.augs_ratio,
+                                bias=False),
+                FastGELU(),
+                torch.nn.Linear(config.hidden_size // args.augs_ratio, config.hidden_size,
+                                bias=False)
+            )
+            for param in self.attn_linear.parameters():
+                setattr(param, 'sequence_parallel', config.sequence_parallel)
 
         # Set bias+dropout+add fusion grad_enable execution handler.
         TORCH_MAJOR = int(torch.__version__.split('.')[0])
@@ -1155,6 +1188,7 @@ class ParallelTransformerLayer(MegatronModule):
                 args.retro_num_retrieved_chunks * args.retro_chunk_length
 
         # hidden_states: [s, b, h]
+        add_residual = False if self.use_sandwich_norm else True
 
         # Layer norm at the beginning of the transformer layer.
         norm_output = self.input_norm(hidden_states)
@@ -1193,16 +1227,29 @@ class ParallelTransformerLayer(MegatronModule):
                     attention_output,
                     attention_bias,
                     residual,
-                    self.hidden_dropout)
+                    self.hidden_dropout,
+                    add_residual=add_residual)
+                if self.use_sandwich_norm:
+                    norm_input = self.attn_post_norm(norm_input)
+                    norm_input += residual
         else:
-            out = torch.nn.functional.dropout(attention_output + attention_bias,
+            out = attention_output + attention_bias
+            out = torch.nn.functional.dropout(out,
                                               p=self.hidden_dropout,
                                               training=self.training)
+            if self.use_sandwich_norm:
+                out = self.attn_post_norm(out)
+            
             norm_input = residual + self.drop_path(out)
+
+        if self.use_augs_attention:
+            norm_input = norm_input + self.attn_linear(attention_output + attention_bias)  # todo hewei
 
         # Layer norm post the self attention.
         norm_output = self.post_attention_norm(norm_input)
 
+        if self.use_sandwich_norm and encoder_output is not None:
+                raise Exception("Sandwich normalization does not support cross attention now.")
         # Cross attention.
         if self.layer_type == LayerType.encoder:
             pass
@@ -1253,7 +1300,12 @@ class ParallelTransformerLayer(MegatronModule):
                     mlp_output,
                     mlp_bias,
                     residual,
-                    self.hidden_dropout)
+                    self.hidden_dropout,
+                    add_residual=add_residual)
+                if self.use_sandwich_norm:
+                    output = self.ffn_post_norm(output)
+                    output += residual
+                
 
             # Jit compiled function creates 'view' tensor. This tensor
             # potentially gets saved in the MPU checkpoint function context,
@@ -1268,10 +1320,13 @@ class ParallelTransformerLayer(MegatronModule):
         else:
             if mlp_bias is not None:
                 mlp_output = mlp_output + mlp_bias
-            out = torch.nn.functional.dropout(mlp_output,
+            mlp_output = torch.nn.functional.dropout(mlp_output,
                                               p=self.hidden_dropout,
                                               training=self.training)
-            output = residual + self.drop_path(out)
+            if self.use_sandwich_norm:
+                mlp_output = self.ffn_post_norm(mlp_output)
+
+            output = residual + self.drop_path(mlp_output)
 
         if self.layer_type == LayerType.retro_decoder_with_retriever:
             return output, retriever_output

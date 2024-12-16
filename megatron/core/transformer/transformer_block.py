@@ -11,7 +11,7 @@ from torch import Tensor
 from megatron.core import InferenceParams, parallel_state, tensor_parallel
 from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.dist_checkpointing.utils import replace_prefix_for_sharding
-# from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
+from megatron.core.fusions.fused_layer_norm import FusedLayerNorm
 from megatron.core.packed_seq_params import PackedSeqParams
 from megatron.core.transformer.custom_layers.transformer_engine import (
     TENorm,
@@ -23,7 +23,7 @@ from megatron.core.transformer.spec_utils import ModuleSpec, build_module
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.transformer.transformer_layer import BaseTransformerLayer, TransformerLayer
 from megatron.core.transformer.utils import sharded_state_dict_default
-from megatron.core.utils import make_sharded_tensor_for_checkpoint
+from megatron.core.utils import make_sharded_tensor_for_checkpoint, make_viewless_tensor
 
 
 def get_num_layers_to_build(config: TransformerConfig) -> int:
@@ -80,7 +80,12 @@ def _get_block_submodules(
         if issubclass(spec.module, TransformerBlock):
             return spec.submodules
         elif issubclass(spec.module, BaseTransformerLayer):
-            num_layers = get_num_layers_to_build(config)
+            from megatron.training import get_args 
+            if get_args().pipeline_layer_index:
+                num_layers = config.num_layers
+            else:
+                num_layers = get_num_layers_to_build(config)
+            print(f"core num_layers:{num_layers}")
             return TransformerBlockSubmodules(layer_specs=[spec] * num_layers)
         else:
             raise Exception(f"specialize for {spec.module.__name__}.")
@@ -110,6 +115,7 @@ class TransformerBlock(MegatronModule):
         self.input_tensor = None
 
         self.checkpoint_core_attention = self.config.recompute_granularity == 'selective'
+        self.fp32_residual_connection = self.config.fp32_residual_connection
 
         if get_cpu_offload_context is not None:
             (
@@ -302,6 +308,8 @@ class TransformerBlock(MegatronModule):
             # See set_input_tensor()
             hidden_states = self.input_tensor
 
+        if self.fp32_residual_connection:
+            hidden_states = hidden_states.contiguous().float()
         # Viewless tensor.
         # - We only need to create a viewless tensor in the case of micro batch
         #   size (mbs) == 1, since in this case, 'hidden_states.transpose()'
@@ -317,9 +325,9 @@ class TransformerBlock(MegatronModule):
         #   likely redundant, since p2p_communication.py (likely originator)
         #   already creates viewless tensors. That said, make_viewless_tensor()
         #   is called here to be future-proof and corner-case-proof.
-        # hidden_states = make_viewless_tensor(
-        #     inp=hidden_states, requires_grad=True, keep_graph=True,
-        # )
+        hidden_states = make_viewless_tensor(
+            inp=hidden_states, requires_grad=True, keep_graph=True,
+        )
 
         if self.config.sequence_parallel:
             rng_context = tensor_parallel.get_cuda_rng_tracker().fork()

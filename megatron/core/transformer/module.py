@@ -4,6 +4,7 @@
 from typing import Optional, Tuple
 
 import torch
+from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 
 from megatron.core import parallel_state
@@ -107,7 +108,7 @@ def conversion_helper(val, conversion):
 def fp32_to_float16(val, float16_convertor):
     def half_conversion(val):
         val_typecheck = val
-        if isinstance(val_typecheck, Parameter):
+        if isinstance(val_typecheck, (Parameter, Variable)):
             val_typecheck = val.data
         if isinstance(val_typecheck, _FLOAT_TYPES):
             val = float16_convertor(val)
@@ -119,7 +120,7 @@ def fp32_to_float16(val, float16_convertor):
 def float16_to_fp32(val):
     def float_conversion(val):
         val_typecheck = val
-        if isinstance(val_typecheck, Parameter):
+        if isinstance(val_typecheck, (Parameter, Variable)):
             val_typecheck = val.data
         if isinstance(val_typecheck, (_BF16_TYPES, _HALF_TYPES)):
             val = val.float()

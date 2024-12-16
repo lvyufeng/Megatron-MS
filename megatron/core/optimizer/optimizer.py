@@ -8,7 +8,9 @@ from itertools import chain
 from logging import getLogger
 from typing import Callable, List, Optional
 
+import amp_C
 import torch
+from apex.multi_tensor_apply import multi_tensor_applier
 
 from .. import parallel_state, tensor_parallel
 from ..dist_checkpointing.mapping import ShardedStateDict
@@ -81,6 +83,12 @@ class MegatronOptimizer(ABC):
         """Input optimizer is the base optimizer (e.g., Adam)."""
         self.optimizer = optimizer
         assert self.optimizer, 'no optimizer is provided.'
+        self.empty_optmizer = False
+        # Fake optimizer params list
+        if getattr(self.optimizer.param_groups[0]['params'][0], 'fake', False):
+            self.empty_optmizer = True
+        print(f'[DEBUG] rank {torch.distributed.get_rank()} empty_optmizer:{self.empty_optmizer}')
+
         self.config = config
         self.init_state_fn = init_state_fn
 

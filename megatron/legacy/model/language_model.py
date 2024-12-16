@@ -14,7 +14,7 @@ from .enums import AttnMaskType, LayerType
 from .module import MegatronModule
 from .transformer import ParallelTransformer
 from .utils import get_linear_layer
-from .utils import init_method_normal, scaled_init_method_normal
+from .utils import init_method_normal, scaled_init_method_normal, get_norm
 
 
 def parallel_lm_logits(input_, word_embeddings_weight, parallel_output,
@@ -148,8 +148,10 @@ class Embedding(MegatronModule):
 
         # Word embeddings (parallel).
         self.params_dtype = args.params_dtype
+        emb_init_method = init_method_normal(args.emb_init_method_std)
+
         self.word_embeddings = tensor_parallel.VocabParallelEmbedding(
-            vocab_size, self.hidden_size, config=config, init_method=config.init_method)
+            vocab_size, self.hidden_size, config=config, init_method=emb_init_method)
         self._word_embeddings_key = 'word_embeddings'
 
         # Position embedding (serial).
@@ -364,6 +366,8 @@ class TransformerLanguageModel(MegatronModule):
                                        self.num_tokentypes)
             self._embedding_key = 'embedding'
 
+        self.embedding_scaling = args.embedding_scaling
+
         # Rotary positional embeddings
         self.use_rotary_position_embeddings = \
             args.position_embedding_type == 'rope'
@@ -378,6 +382,7 @@ class TransformerLanguageModel(MegatronModule):
             self.rotary_pos_emb = RotaryEmbedding(
                 kv_channels=rotary_dim,
                 rotary_percent=args.rotary_percent,
+                rotary_interleaved=args.rotary_interleaved,
                 seq_len_interpolation_factor=args.rotary_seq_len_interpolation_factor,
             )
 
@@ -467,9 +472,11 @@ class TransformerLanguageModel(MegatronModule):
         if self.pre_process:
             encoder_input = self.embedding(enc_input_ids, enc_position_ids,
                                            tokentype_ids=tokentype_ids)
+            if self.embedding_scaling:
+                embedding_scaling = torch.tensor(self.embedding_scaling, dtype=encoder_input.dtype)
+                encoder_input = encoder_input * embedding_scaling
         else:
             encoder_input = None
-
         # Retriever embedding.
         if self.add_retriever and self.pre_process:
             retriever_input = self.embedding(retriever_input_ids,

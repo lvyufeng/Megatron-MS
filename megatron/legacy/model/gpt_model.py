@@ -16,7 +16,11 @@ from .language_model import get_language_model
 def post_language_model_processing(lm_output, labels, logit_weights,
                                    parallel_output,
                                    fp16_lm_cross_entropy):
-
+    args = get_args()
+    if args.final_logit_softcapping is not None:
+        lm_output = lm_output / args.final_logit_softcapping
+        lm_output = torch.tanh(lm_output)
+        lm_output = lm_output * args.final_logit_softcapping
     # Output. Format [s b h]
     output = parallel_lm_logits(
         lm_output,

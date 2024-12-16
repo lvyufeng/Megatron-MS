@@ -241,11 +241,7 @@ def validate_args(args, defaults={}):
         assert args.pipeline_model_parallel_size > 2, \
             'pipeline-model-parallel size should be greater than 2 with ' \
             'interleaved schedule'
-        assert args.num_layers % args.transformer_pipeline_model_parallel_size == 0, \
-            'number of layers should be divisible by the pipeline parallel size'
         num_layers_per_pipeline_stage = args.num_layers // args.transformer_pipeline_model_parallel_size
-        assert num_layers_per_pipeline_stage % args.num_layers_per_virtual_pipeline_stage == 0, \
-            'number of layers per pipeline stage must be divisible number of layers per virtual pipeline stage'
         args.virtual_pipeline_model_parallel_size = num_layers_per_pipeline_stage // \
             args.num_layers_per_virtual_pipeline_stage
     else:
@@ -286,6 +282,16 @@ def validate_args(args, defaults={}):
             if args.rank == 0:
                 print('accumulate and all-reduce gradients in fp32 for '
                       'bfloat16 data type.', flush=True)
+
+    # Embedding dtype.
+    if args.embedding_dtype == 'fp16':
+        args.embedding_dtype = torch.half
+    elif args.embedding_dtype == 'bf16':
+        args.embedding_dtype = torch.bfloat16
+    elif args.embedding_dtype == 'fp32':
+        args.embedding_dtype = torch.float
+    else:
+        args.embedding_dtype = args.params_dtype
 
     if args.rank == 0:
         print('using {} for parameters ...'.format(args.params_dtype),
@@ -481,10 +487,9 @@ def validate_args(args, defaults={}):
     # Legacy RoPE arguments
     if args.use_rotary_position_embeddings:
         args.position_embedding_type = 'rope'
-    if args.rotary_interleaved and args.apply_rope_fusion:
-        raise RuntimeError('--rotary-interleaved does not work with rope_fusion.')
-    if args.rotary_interleaved and not args.use_mcore_models:
-        raise RuntimeError('--rotary-interleaved only support Megatron Core, please add --use-mcore-models.')
+
+    # if args.rotary_interleaved and not args.use_mcore_models:
+    #     raise RuntimeError('--rotary-interleaved only support Megatron Core, please add --use-mcore-models.')
 
     # Would just need to add 'NoPE' as a position_embedding_type to support this, but for now
     # don't allow it to keep things simple
@@ -559,6 +564,11 @@ def core_transformer_config_from_args(args, config_class=None):
         kw_args['bias_activation_fusion'] = args.bias_swiglu_fusion
     else:
         kw_args['bias_activation_fusion'] = args.bias_gelu_fusion
+    if args.fast_gelu:
+        import torch_npu
+        def fast_gelu(x):
+            return torch_npu.fast_gelu(x)
+        kw_args['activation_func'] = fast_gelu
     if args.squared_relu:
         assert not args.swiglu
         def squared_relu(x):
@@ -571,6 +581,7 @@ def core_transformer_config_from_args(args, config_class=None):
         kw_args['num_query_groups'] = args.num_query_groups
     else:
         kw_args['num_query_groups'] = None
+    kw_args['multimodal'] = args.multimodal
 
     # Return config.
     return config_class(**kw_args)
@@ -707,7 +718,7 @@ def _add_network_size_args(parser):
                        help='Maximum number of position embeddings to use. '
                        'This is the size of position embedding.')
     group.add_argument('--position-embedding-type', type=str, default='learned_absolute',
-                       choices=['learned_absolute', 'rope'],
+                       choices=['learned_absolute', 'rope', 'classic'],
                        help='Position embedding type.')
     group.add_argument('--use-rotary-position-embeddings', action='store_true',
                        help='Use rotary positional embeddings or not. '
@@ -1401,16 +1412,6 @@ def _add_data_args(parser):
                        help='Probability of producing a short sequence.')
     group.add_argument('--num-workers', type=int, default=2,
                        help="Dataloader number of workers.")
-    group.add_argument('--tokenizer-type', type=str,
-                       default=None,
-                       choices=['BertWordPieceLowerCase',
-                                'BertWordPieceCase',
-                                'GPT2BPETokenizer',
-                                'SentencePieceTokenizer',
-                                'GPTSentencePieceTokenizer',
-                                'Llama2Tokenizer',
-                                'NullTokenizer'],
-                       help='What type of tokenizer to use.')
     group.add_argument('--tokenizer-model', type=str, default=None,
                        help='Sentencepiece tokenizer model.')
     group.add_argument('--reset-position-ids', action='store_true',

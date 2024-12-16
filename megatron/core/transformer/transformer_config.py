@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
 import torch
-from torch.nn import functional as F
+import torch.nn.functional as F
 
 from ..model_parallel_config import ModelParallelConfig
 from ..utils import init_method_normal, scaled_init_method_normal
@@ -94,6 +94,9 @@ class TransformerConfig(ModelParallelConfig):
     test_mode: bool = False
     """Whether to run real-time tests."""
 
+    multimodal: bool = False
+    """Whether mm model"""
+
     ####################
     # initialization
     ####################
@@ -145,6 +148,8 @@ class TransformerConfig(ModelParallelConfig):
 
     apply_rope_fusion: bool = False
     """If True, use fused RoPE kernel."""
+
+    use_rope: bool = False  # TODO: xywu, delete it later
 
     ####################
     # activation recomputation
@@ -371,8 +376,6 @@ class TransformerConfig(ModelParallelConfig):
                     "When bias_activation_fusion is True, gated_linear_unit is False, "
                     "and activation function is gelu, add_bias_linear must also be True."
                 )
-        if self.apply_rope_fusion and self.rotary_interleaved:
-            raise ValueError(f'rotary_interleaved does not work with apply_rope_fusion.')
 
         if self.init_method is None:
             self.init_method = init_method_normal(self.init_method_std)

@@ -102,7 +102,7 @@ class BlendedMegatronDatasetBuilder(object):
                 prefix_per_dataset,
                 weight_per_dataset,
                 sizes_per_dataset,
-            ) = _get_prefixes_weights_and_sizes_for_blend(blend, self.sizes)
+            ) = _get_prefixes_weights_and_sizes_for_blend(blend, self.sizes, self.config.dataset_margin)
 
             megatron_datasets = [[] for _ in range(len(Split))]
 
@@ -167,7 +167,7 @@ class BlendedMegatronDatasetBuilder(object):
                         prefix_per_dataset,
                         weight_per_dataset,
                         sizes_per_dataset,
-                    ) = _get_prefixes_weights_and_sizes_for_blend(blend, sizes_spoof)
+                    ) = _get_prefixes_weights_and_sizes_for_blend(blend, sizes_spoof, self.config.dataset_margin)
 
                     megatron_datasets = []
                     for j in range(len(prefix_per_dataset)):
@@ -293,7 +293,6 @@ class BlendedMegatronDatasetBuilder(object):
             torch.distributed.barrier()
 
             # After, build on other ranks
-            print(cls)
             if rank != 0 and is_built_on_rank():
                 dataset = cls(*args)
 
@@ -303,7 +302,7 @@ class BlendedMegatronDatasetBuilder(object):
 
 
 def _get_prefixes_weights_and_sizes_for_blend(
-    blend: List[str], target_num_samples_per_split: List[int]
+    blend: List[str], target_num_samples_per_split: List[int], dataset_margin: float
 ) -> Tuple[List[str], List[float], List[List[int]]]:
     """Determine the contribution of the MegatronDataset splits to the BlendedDataset splits
     
@@ -324,7 +323,7 @@ def _get_prefixes_weights_and_sizes_for_blend(
     # Use 0.5% target margin to ensure we satiate the network
     sizes_per_dataset = [
         [
-            int(math.ceil(target_num_samples * weight * 1.005))
+            int(math.ceil(target_num_samples * weight * dataset_margin))
             for target_num_samples in target_num_samples_per_split
         ]
         for weight in weights

@@ -59,9 +59,11 @@ def erf_gelu(x):
     return x * 0.5 * (torch.erf(x / 1.41421).to(dtype=x.dtype)+torch.ones_like(x).to(dtype=x.dtype))
 
 
-def get_norm(config):
+def get_norm(config, scale=1.0):
     args = get_args()
     if args.normalization == "LayerNorm":
+        if scale != 1.0:
+            raise Exception("Layernorm only supports the scale value of 1.")
         return LayerNorm(
             config.hidden_size,
             eps=config.layernorm_epsilon,
@@ -74,6 +76,7 @@ def get_norm(config):
 
         return RMSNorm(dim=config.hidden_size,
                        eps=config.layernorm_epsilon,
-                       sequence_parallel=config.sequence_parallel)
+                       sequence_parallel=config.sequence_parallel,
+                       scale=scale)
     else:
         raise Exception(f"unsupported norm type '{args.normalization}'.")
