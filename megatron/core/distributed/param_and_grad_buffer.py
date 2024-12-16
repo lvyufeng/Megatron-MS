@@ -305,14 +305,6 @@ class ParamAndGradBuffer:
                     # data_start_index should already be padded.
                     assert data_start_index % self.data_parallel_world_size == 0
                 _create_new_bucket(data_start_index)
-            param_name = param_to_name[param]
-            self.param_index_map_full[param_name] = (
-                str(param.dtype),
-                param.shape,
-                data_start_index,
-                data_end_index,
-                bucket_id,
-            )
             self.param_index_map[param] = (
                 data_start_index,
                 data_end_index,

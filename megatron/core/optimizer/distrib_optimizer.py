@@ -2,8 +2,6 @@
 
 """Megatron distributed optimizer."""
 
-import shutil
-from pathlib import Path
 import itertools
 from logging import getLogger
 from typing import Callable, Dict, List, Optional, Tuple
@@ -21,19 +19,6 @@ from .optimizer_config import OptimizerConfig
 
 logger = getLogger(__name__)
 
-def move_param_map(filename):
-    pt_file_path = Path(filename)
-    for parent_path in pt_file_path.parents:
-        if parent_path.parts[-1].startswith("iter_"):
-            existed_path = list(parent_path.glob('param_map*'))
-            if existed_path:
-                break
-            target_path = parent_path/'param_map'
-            try:
-                shutil.copytree('/cache/buffers/', target_path,dirs_exist_ok=True)
-            except Exception as e:
-                print(f' > WARNING: could not copy param map files. \n{e}')
-    return
 
 class Range:
     """
@@ -812,7 +797,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
 
         state_dict = self.get_parameter_state_dp_zero()
         if torch.distributed.get_rank(self.data_parallel_group) == 0:
-            move_param_map(filename)
             torch.save(state_dict, filename)
 
     def sharded_state_dict(

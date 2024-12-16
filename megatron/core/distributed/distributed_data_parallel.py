@@ -11,34 +11,6 @@ from ..transformer.module import MegatronModule
 from ..transformer.transformer_config import TransformerConfig
 from .param_and_grad_buffer import ParamAndGradBuffer
 
-import json
-
-def save_param_map(data_parallel_group,buffers, filename):
-    dp = torch.distributed.get_rank(data_parallel_group)
-    pp = parallel_state.get_pipeline_model_parallel_rank()
-    tp = parallel_state.get_tensor_model_parallel_rank()
-    if not os.path.exists(filename):
-        os.makedirs(filename, exist_ok=True)
-    for buffer_id, buffer in enumerate(buffers):
-        files = [f for f in os.listdir(filename) if f.startswith(f"param_map_buffer{buffer_id}_dp{dp}tp{tp}pp{pp}vpp")]
-        if not files:
-            vpp = 0
-            map_path = os.path.join(filename,f"param_map_buffer{buffer_id}_dp{dp}tp{tp}pp{pp}vpp{vpp}.json")
-        else:
-            vpp_values = []
-            for f in files:
-                f_parts = f.split(".")
-                vpp = int(f_parts[0].split("vpp")[-1])
-                vpp_values.append(vpp)
-            cur_vpp = max(vpp_values) + 1
-            map_path = os.path.join(filename,f"param_map_buffer{buffer_id}_dp{dp}tp{tp}pp{pp}vpp{cur_vpp}.json")
-        print(f"map_path:{map_path}: {buffer.param_index_map_full}")
-        try:
-            with open(map_path, "w") as outfile:
-                json.dump(buffer.param_index_map_full, outfile)
-        except Exception as e:
-            print(f' > WARNING: could not save param map files. \n{e}')
-
 
 class DistributedDataParallel(MegatronModule):
     """
@@ -167,7 +139,6 @@ class DistributedDataParallel(MegatronModule):
             data_parallel_group,
             gradient_scaling_factor=1.0 / data_parallel_world_size,
         )
-        save_param_map(data_parallel_group,self.buffers, "/cache/buffers")
         # Allocate separate param+grad buffers for expert parallel params' grads.
         self.expert_parallel_buffers = allocate_buffers_for_parameters(
             expert_parallel_params,
