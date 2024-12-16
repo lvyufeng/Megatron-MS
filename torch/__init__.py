@@ -74,6 +74,7 @@ float = float32
 bool = bool_
 cfloat = complex64
 cdouble = complex128
+bfloat16 = mindspore.bfloat16
 
 def tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=False):
     return Tensor(data, dtype)
@@ -100,3 +101,6 @@ def is_autocast_enabled(device_type):
 
 def use_deterministic_algorithms(flag: bool):
     context.set_context(deterministic='ON' if flag else 'OFF')
+
+def is_grad_enabled():
+    return True

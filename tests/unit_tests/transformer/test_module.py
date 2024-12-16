@@ -9,9 +9,11 @@ from megatron.core.transformer.transformer_config import TransformerConfig
 from tests.unit_tests.test_utilities import Utils
 from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
 
+'''
 DEVICE_CAPABILITY = None
 if torch.cuda.is_available():
     DEVICE_CAPABILITY = torch.cuda.get_device_capability()
+'''
 
 
 class DummyModule(MegatronModule):
@@ -77,9 +79,11 @@ class TestFloat16Module:
         # inputs are converted to fp16 then outputs are converted to fp32
         assert fp16_module(x).dtype == torch.float32
 
+    '''
     pytest.mark.skipif(
         not DEVICE_CAPABILITY or DEVICE_CAPABILITY[0] < 8, reason='bfloat16 is not supported on this device'
     )
+    '''
 
     def test_bf16_module(self):
         transformer_config = self.transformer_config

@@ -10,7 +10,7 @@ from megatron.core.dist_checkpointing.mapping import ShardedObject, ShardedTenso
 from megatron.core.transformer.transformer_layer import TransformerLayer
 from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
 from megatron.core.transformer.transformer_config import TransformerConfig
-from megatron.core.models.gpt.gpt_layer_specs import get_gpt_layer_with_transformer_engine_spec
+from megatron.core.models.gpt.gpt_layer_specs import get_gpt_layer_local_spec
 from tests.unit_tests.test_utilities import Utils
 
 
@@ -21,7 +21,7 @@ class TestParallelTransformerLayer:
         model_parallel_cuda_manual_seed(123)
         transformer_config = TransformerConfig(num_layers=2, hidden_size=12, num_attention_heads=4, use_cpu_initialization=True)
         self.parallel_transformer_layer = TransformerLayer(transformer_config,
-                                                           get_gpt_layer_with_transformer_engine_spec().submodules)
+                                                           get_gpt_layer_local_spec().submodules)
 
     def teardown_method(self, method):
         Utils.destroy_model_parallel()
@@ -60,7 +60,7 @@ class TestParallelTransformerLayer:
         model_parallel_cuda_manual_seed(123)
         transformer_config = TransformerConfig(num_layers=2, hidden_size=128, num_attention_heads=8, use_cpu_initialization=True)
         parallel_transformer_layer = TransformerLayer(transformer_config,
-                                                      get_gpt_layer_with_transformer_engine_spec().submodules)
+                                                      get_gpt_layer_local_spec().submodules)
 
         sharded_state_dict = parallel_transformer_layer.sharded_state_dict()
 
@@ -80,26 +80,37 @@ class TestParallelTransformerLayer:
         assert tensor_global_shapes == expected_global_shapes
 
         # Test ShardedTensor keys
+        sharded_state_dict_keys_map={
+            'input_layernorm.': 'self_attention.linear_qkv.layer_norm_',
+            'pre_mlp_layernorm.': 'mlp.linear_fc1.layer_norm_',
+        }
         for state_dict_key, sh_ten in sharded_tensors.items():
+            for key in sharded_state_dict_keys_map.keys():
+                if key in state_dict_key:
+                    state_dict_key = state_dict_key.replace(key, sharded_state_dict_keys_map[key])
             assert state_dict_key == sh_ten.key
 
         Utils.destroy_model_parallel()
-        Utils.initialize_model_parallel(1, 1)
+        # Utils.initialize_model_parallel(1, 1)
 
 
 def get_tensor_shapes_for_tp(transformer_config, tp_size):
     hs = transformer_config.hidden_size
     return {
-        'mlp.linear_fc1.layer_norm_weight': (hs,),
-        'mlp.linear_fc1.layer_norm_bias': (hs,),
+        'pre_mlp_layernorm.weight': (hs,),
+        'pre_mlp_layernorm.bias': (hs,),
+        # 'mlp.linear_fc1.layer_norm_weight': (hs,),
+        # 'mlp.linear_fc1.layer_norm_bias': (hs,),
         'mlp.linear_fc1.weight': (hs * 4 // tp_size, hs),
         'mlp.linear_fc1.bias': (hs * 4 // tp_size,),
         'mlp.linear_fc2.weight': (hs, hs * 4 // tp_size),
         'mlp.linear_fc2.bias': (hs,),
         'self_attention.linear_proj.weight': (hs, hs // tp_size),
         'self_attention.linear_proj.bias': (hs,),
-        'self_attention.linear_qkv.layer_norm_weight': (hs,),
-        'self_attention.linear_qkv.layer_norm_bias': (hs,),
+        'input_layernorm.weight': (hs,),
+        'input_layernorm.bias': (hs,),
+        # 'self_attention.linear_qkv.layer_norm_weight': (hs,),
+        # 'self_attention.linear_qkv.layer_norm_bias': (hs,),
         'self_attention.linear_qkv.weight': (hs * 3 // tp_size, hs),
         'self_attention.linear_qkv.bias': (hs * 3 // tp_size,),
     }

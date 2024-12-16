@@ -1319,6 +1319,18 @@ class Module:
         return self._apply(lambda t: t.half() if t.is_floating_point() else t)
 
 
+    def bfloat16(self: T) -> T:
+        r"""Casts all floating point parameters and buffers to ``bfloat16`` datatype.
+
+        .. note::
+            This method modifies the module in-place.
+
+        Returns:
+            Module: self
+        """
+        return self._apply(lambda t: t.bfloat16() if t.is_floating_point() else t)
+
+
     def _save_to_state_dict(self, destination, prefix, keep_vars):
         r"""Save module state to the `destination` dictionary.
 

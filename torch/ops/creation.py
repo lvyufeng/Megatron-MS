@@ -1,6 +1,7 @@
 """creation ops"""
 import numpy as np
 import mindspore
+from mindspore.common.dtype import bool_
 from mindspore._c_expression import Tensor as CTensor # pylint: disable=no-name-in-module, import-error
 from mindspore import ops
 from mindspore.ops._primitive_cache import _get_cache_prim
@@ -58,6 +59,8 @@ def ones(*size, dtype=None, device=None):
         size = size[0]
     if dtype is None:
         dtype = get_default_dtype()
+    if dtype == bool:
+        dtype = bool_
     if use_pyboost():
         return mindspore.mint.ones(size, dtype=dtype)
     return _ones(size, dtype)
