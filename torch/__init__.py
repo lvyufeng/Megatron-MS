@@ -51,13 +51,15 @@ class device:
     def __init__(self, name):
         pass
 
-from torch import amp as amp
-from . import optim, ops, nn, distributions, cuda, distributed
-from .utils import get_default_dtype, set_default_dtype, manual_seed, use_deterministic_algorithms
-from .autograd import no_grad, enable_grad, value_and_grad
-from .serialization import *
-from .ops import *
 
+from .ops import *
+from torch import amp as amp, random as random, serialization as serialization, utils as utils
+from torch.amp import autocast, GradScaler
+from torch.random import get_rng_state, initial_seed, manual_seed, seed, set_rng_state
+from torch.serialization import load, save
+from . import optim, ops, nn, distributions, cuda, distributed
+from .autograd import no_grad, enable_grad, value_and_grad
+from ._bind import get_default_dtype, set_default_dtype
 
 FloatTensor = Tensor
 HalfTensor = Tensor
@@ -95,3 +97,6 @@ def get_autocast_dtype(device_type):
 
 def is_autocast_enabled(device_type):
     return device_type in AUTO_CAST_DTYE.keys()
+
+def use_deterministic_algorithms(flag: bool):
+    context.set_context(deterministic='ON' if flag else 'OFF')

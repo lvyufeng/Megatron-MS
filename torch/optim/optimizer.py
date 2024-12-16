@@ -27,8 +27,9 @@ from typing_extensions import ParamSpec, Self, TypeAlias
 import mindspore
 from torch.nn import Parameter
 from .. import ops
-from ..utils import get_default_dtype, hooks
+from ..utils import hooks
 from ..utils.hooks import RemovableHandle
+from .._bind import get_default_dtype
 
 Args: TypeAlias = Tuple[Any, ...]
 Kwargs: TypeAlias = Dict[str, Any]

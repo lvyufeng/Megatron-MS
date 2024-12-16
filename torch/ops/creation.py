@@ -5,7 +5,7 @@ from mindspore._c_expression import Tensor as CTensor # pylint: disable=no-name-
 from mindspore import ops
 from mindspore.ops._primitive_cache import _get_cache_prim
 from ..configs import use_pyboost, ON_ORANGE_PI
-from ..utils import get_default_dtype
+from .._bind import get_default_dtype
 
 def as_strided(self, size, stride, storage_offset=None):
     if len(size) != len(stride):

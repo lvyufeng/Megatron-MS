@@ -48,9 +48,8 @@ import safetensors
 import safetensors.numpy
 from safetensors import deserialize
 
-from torch.nn import Parameter
 from .configs import SUPPORT_BF16
-from .nn import Module
+from .nn import Module, Parameter
 
 
 if SUPPORT_BF16:

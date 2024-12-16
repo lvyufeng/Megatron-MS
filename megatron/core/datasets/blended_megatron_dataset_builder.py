@@ -293,6 +293,7 @@ class BlendedMegatronDatasetBuilder(object):
             torch.distributed.barrier()
 
             # After, build on other ranks
+            print(cls)
             if rank != 0 and is_built_on_rank():
                 dataset = cls(*args)
 

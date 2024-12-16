@@ -7,7 +7,7 @@ from ..configs import use_pyboost, DEVICE_TARGET, GENERATOR_SEED
 from .other import cumsum, searchsorted
 from .comparison import topk
 from .pointwise import div, log
-from ..utils import get_default_dtype
+from .._bind import get_default_dtype
 
 # bernoulli
 def bernoulli(input, p=0.5):

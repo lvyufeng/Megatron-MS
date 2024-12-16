@@ -7,7 +7,7 @@ from typing import Any, Dict
 import mindspore
 from .. import ops
 from ..autograd import enable_grad
-from ..utils import get_default_dtype
+from .._bind import get_default_dtype
 from ..nn import functional as F
 
 

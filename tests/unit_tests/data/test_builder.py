@@ -83,6 +83,8 @@ def test_builder():
             return len(self.sample_index)
 
         def __getitem__(self, idx: int) -> Dict[str, numpy.ndarray]:
+            print('self.dataset', self.dataset.shape)
+            print('self.sample_index', self.sample_index)
             return {"text": self.dataset[self.sample_index[idx]]}
 
     with tempfile.TemporaryDirectory() as temp_dir:
