@@ -2414,13 +2414,12 @@ def all_reduce(tensor, op=ReduceOp.SUM, group=None, async_op=False):
         else:
             return None
 
-    new_tensor, work = group.allreduce([tensor], opts)
+    work = group.allreduce([tensor], opts)
 
     if async_op:
-        return new_tensor, work
+        return work
     else:
         work.wait()
-        return new_tensor, None
 
 
 @_exception_logger
@@ -3300,13 +3299,12 @@ def all_gather(tensor_list, tensor, group=None, async_op=False):
     tensor = tensor if not tensor.is_complex() else torch.view_as_real(tensor)
 
     group = group or _get_default_group()
-    new_tensor_list, work = group.allgather([tensor_list], [tensor])
+    work = group.allgather([tensor_list], [tensor])
 
     if async_op:
-        return new_tensor_list, work
+        return work
     else:
         work.wait()
-        return new_tensor_list, None
 
 
 @_exception_logger
@@ -3395,13 +3393,12 @@ def all_gather_into_tensor(output_tensor, input_tensor, group=None, async_op=Fal
         else:
             return None
 
-    output, work = group._allgather_base(output_tensor, input_tensor, opts)
+    work = group._allgather_base(output_tensor, input_tensor, opts)
 
     if async_op:
-        return output, work
+        return work
     else:
         work.wait()
-        return output, None
 
 
 @_exception_logger
@@ -3605,13 +3602,12 @@ def gather(
     opts = GatherOptions()
     opts.rootRank = global_dst
     opts.groupRank = group_dst
-    output_list = group.gather(output_tensors, input_tensors, opts)
+    work = group.gather(output_tensors, input_tensors, opts)
 
-    # if async_op:
-    #     return work
-    # else:
-    #     work.wait()
-    return output_list
+    if async_op:
+        return work
+    else:
+        work.wait()
 
 
 @_exception_logger
@@ -3711,12 +3707,12 @@ def scatter(
     opts.rootRank = global_src
     opts.groupRank = group_src
     opts.asyncOp = async_op
-    out = group.scatter(output_tensors, input_tensors, opts)
-    return out
-    # if async_op:
-    #     return work
-    # else:
-    #     work.wait()
+    work = group.scatter(output_tensors, input_tensors, opts)
+
+    if async_op:
+        return work
+    else:
+        work.wait()
 
 
 @_exception_logger
@@ -3836,13 +3832,12 @@ def reduce_scatter_tensor(output, input, op=ReduceOp.SUM, group=None, async_op=F
         else:
             return None
 
-    output, work = group._reduce_scatter_base(output, input, opts)
+    work = group._reduce_scatter_base(output, input, opts)
 
     if async_op:
-        return output, work
+        return work
     else:
         work.wait()
-        return output, None
 
 
 @deprecated(
@@ -4156,10 +4151,10 @@ def barrier(
     work = group.barrier(opts=opts)
 
     # wait for new op
-    # if async_op:
-    #     return work
-    # else:
-    #     work.wait()
+    if async_op:
+        return work
+    else:
+        work.wait()
 
 
 def monitored_barrier(

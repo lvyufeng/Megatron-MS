@@ -5,6 +5,26 @@ from mindspore.common._stub_tensor import StubTensor
 from mindspore._c_expression import Tensor as Tensor_
 from ._utils import _rebuild_tensor_v2
 
+def to_dense(self):
+    return self
+
+Tensor.to_dense = to_dense
+StubTensor.to_dense = to_dense
+
+Tensor._base = None
+StubTensor._base = None
+
+@property
+def data(self):
+    return self
+
+@data.setter
+def data(self, new_value):
+    self.assign_value(new_value)
+
+Tensor.data = data
+StubTensor.data = data
+
 def numel(self):
     return ops.size(self)
 

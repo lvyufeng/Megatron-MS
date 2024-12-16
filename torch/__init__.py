@@ -100,3 +100,5 @@ def is_autocast_enabled(device_type):
 
 def use_deterministic_algorithms(flag: bool):
     context.set_context(deterministic='ON' if flag else 'OFF')
+
+__version__ = "2.5"

@@ -4,9 +4,10 @@ from typing import List, Optional, Dict, Any
 from enum import Enum
 import time
 from mindspore.communication.comm_func import barrier, broadcast, reduce, gather_into_tensor, scatter_tensor
-from mindspore.ops.auto_generate.gen_ops_prim import (inner_comm_all_reduce_op, inner_comm_all_gather_op,
-                                                      inner_comm_all_to_all_v_op, inner_comm_irecv_op,
-                                                      inner_comm_isend_op, inner_comm_reduce_scatter_op)
+from mindspore.ops.auto_generate.gen_ops_prim import (dist_comm_all_reduce_op, dist_comm_all_gather_op,
+                                                      dist_comm_all_gather_into_tensor_op, dist_comm_reduce_scatter_op,
+                                                      dist_comm_reduce_scatter_tensor_op, dist_comm_barrier_op,
+                                                      dist_comm_scatter_op, dist_comm_gather_op)
 class BackendType(Enum):
     UNDEFINED = 0
     GLOO = 1
@@ -119,21 +120,23 @@ class ProcessGroup:
 
     def allreduce(self, tensors: List[Tensor], opts: Any) -> Any:
         tensor = tensors[0]
-        if tensor.dtype == torch.int64:
-            tensor = tensor.to(torch.int32)
-        new_tensor, handle = inner_comm_all_reduce_op(tensor, opts.reduceOp, self._name)
-        return new_tensor, handle
+        _, handle = dist_comm_all_reduce_op(tensor, opts.reduceOp, self._name)
+        return handle
 
     def _allgather_base(self, output_tensor: Tensor, input_tensor: Tensor, opts: Any=None):
-        new_tensor, handle = inner_comm_all_gather_op(input_tensor, self._size, self._name)
-        return new_tensor, handle
+        input_size = (-1,)
+        output_rank = output_tensor.ndim - 1
+        if output_rank > 0:
+            input_size = input_size + input_tensor.shape[input_tensor.ndim - output_rank:]
+        print(input_tensor.view(input_size).shape)
+        _, handle = dist_comm_all_gather_into_tensor_op(output_tensor, input_tensor.view(input_size), self._size, self._name)
+        return handle
 
     def allgather(self, output_tensors: List[List[Tensor]], input_tensors: List[Tensor], opts: Any=None) -> Any:
         tensor_list = output_tensors[0]
         tensor = input_tensors[0]
-        new_tensor, handle = inner_comm_all_gather_op(tensor, self._size, self._name)
-        new_tensor_list = torch.chunk(new_tensor, len(tensor_list))
-        return new_tensor_list, handle
+        _, handle = dist_comm_all_gather_op(tensor_list, tensor, self._size, self._name)
+        return handle
 
     def reduce(self, tensors: List[Tensor], opts: Any) -> Any:
         out = reduce(tensors[0], opts.rootRank, opts.reduceOp, self._name)
@@ -141,7 +144,8 @@ class ProcessGroup:
 
     def gather(self, output_tensors, input_tensors, opts):
         # # do not use mindspore.communication.gather because not support uint8
-        # tensor = input_tensors[0]
+        tensor = input_tensors[0]
+        gather_list = output_tensors[0]
         # new_tensor, handle = inner_comm_all_gather_op(tensor, self._size, self._name)
 
         # if self._rank == opts.rootRank:
@@ -151,39 +155,31 @@ class ProcessGroup:
         if self._rank == opts.groupRank:
             new_tensor_list = torch.chunk(new_tensor, len(output_tensors[0]))
             return new_tensor_list
-
+        _work = dist_comm_gather_op(tensor, gather_list, self._size, opts.rootRank, self._rank, self._name)
         return []
 
     def scatter(self, output_tensors: List[Tensor], input_tensors: List[List[Tensor]], opts: Any) -> Any:
-        output_tensor = output_tensors[0]
-        if self._rank == opts.groupRank:
-            input_tensor = torch.concat(input_tensors[0])
-        else:
-            input_tensor = torch.zeros(output_tensor.shape[0] * self._size, dtype=output_tensor.dtype)
-        out = scatter_tensor(input_tensor, opts.rootRank, self._name)
-        return out
+        tensor = output_tensors[0]
+        scatter_list = input_tensors[0]
+        _, work = dist_comm_scatter_op(tensor, scatter_list, self._size, opts.rootRank, self._rank, self._name)
+        return work
 
     def reduce_scatter(self, output_tensors: List[Tensor], input_tensors: List[List[Tensor]], opts: Any) -> Any:
-        op = get_backend_op("c10d::reduce_scatter_")
-        work = op.call(
-            output_tensors,
-            input_tensors,
-            self,
-            opts.reduce_op,
-            opts.timeout
-        )
+        output = output_tensors[0]
+        input_list = input_tensors[0]
+        _, work = dist_comm_reduce_scatter_op(output, input_list, self._size, opts.reduceOp, self._name)
         if allow_inflight_collective_as_graph_input():
             for tensor in output_tensors:
                 register_work(tensor, work)
         return work
 
     def _reduce_scatter_base(self, output_tensor, input_tensor, opts: Any):
-        output = inner_comm_reduce_scatter_op(input_tensor, self._size, opts.reduceOp, self._name)
-        return output
+        _, work = dist_comm_reduce_scatter_tensor_op(output_tensor, input_tensor, self._size, opts.reduceOp, self._name)
+        return work
 
     def barrier(self, opts: Any) -> Any:
-        barrier(self._name)
-        return None
+        _, work = dist_comm_barrier_op(self._name)
+        return work
 
     def get_device_types(self) -> List[Any]:
         return list(self.device_types)

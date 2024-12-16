@@ -11,3 +11,5 @@ def current_device():
 
 def is_available():
     return True
+
+from mindspore.hal import Stream

@@ -4,7 +4,7 @@ import os
 import pathlib
 import subprocess
 
-from torch.utils import cpp_extension
+# from torch.utils import cpp_extension
 
 # Setting this param to a list has a problem of generating different
 # compilation commands (with diferent order of architectures) and

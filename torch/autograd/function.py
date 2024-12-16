@@ -113,17 +113,19 @@ class Function(nn.Cell):
     def save_for_backward(self, *args):
         self.saved_tensors.append(args)
 
-    def forward(self, *args, **kwargs):
+    @staticmethod
+    def forward(ctx, *args, **kwargs):
         raise NotImplementedError
 
-    def backward(self, *args, **kwargs):
+    @staticmethod
+    def backward(ctx, *args, **kwargs):
         raise NotImplementedError
 
     def construct(self, *args, **kwargs):
-        return self.forward(*args, **kwargs)
+        return self.forward(self, *args, **kwargs)
 
     def bprop(self, *args, **kwargs):
-        return self.backward(*args, **kwargs)
+        return self.backward(self, *args, **kwargs)
 
     @classmethod
     def apply(cls, *args, **kwargs):

@@ -6,10 +6,6 @@
 import contextlib
 
 import torch
-from torch import _C
-from torch.cuda import _lazy_call
-from torch.cuda import device as device_ctx_manager
-from torch.utils.checkpoint import detach_variable
 
 from megatron.core.parallel_state import (
     get_data_parallel_rank,
@@ -37,30 +33,30 @@ def _set_cuda_rng_state(new_state, device=-1):
     with a single change: the input state is not cloned. Cloning caused
     major performance issues for +4 GPU cases.
     """
-    if hasattr(_C, '_cuda_setRNGState') and callable(_C._cuda_setRNGState):
-        # older PyTorch
-        def cb():
-            with device_ctx_manager(device):
-                _C._cuda_setRNGState(new_state)
+    # if hasattr(_C, '_cuda_setRNGState') and callable(_C._cuda_setRNGState):
+    #     # older PyTorch
+    #     def cb():
+    #         with device_ctx_manager(device):
+    #             _C._cuda_setRNGState(new_state)
 
-    else:
-        # newer PyTorch
-        if device == -1:
-            device = torch.device('cuda')
-        elif isinstance(device, str):
-            device = torch.device(device)
-        elif isinstance(device, int):
-            device = torch.device('cuda', device)
+    # else:
+    #     # newer PyTorch
+    #     if device == -1:
+    #         device = torch.device('cuda')
+    #     elif isinstance(device, str):
+    #         device = torch.device(device)
+    #     elif isinstance(device, int):
+    #         device = torch.device('cuda', device)
 
-        def cb():
-            idx = device.index
-            if idx is None:
-                idx = torch.cuda.current_device()
-            default_generator = torch.cuda.default_generators[idx]
-            default_generator.set_state(new_state)
+    #     def cb():
+    #         idx = device.index
+    #         if idx is None:
+    #             idx = torch.cuda.current_device()
+    #         default_generator = torch.cuda.default_generators[idx]
+    #         default_generator.set_state(new_state)
 
-    _lazy_call(cb)
-
+    # _lazy_call(cb)
+    torch.cuda.set_rng_state(new_state)
 
 def get_expert_parallel_rng_tracker_name():
     global _EXPERT_PARALLEL_RNG_TRACKER_NAME
@@ -250,9 +246,9 @@ class CheckpointFunction(torch.autograd.Function):
         get_cuda_rng_tracker().set_states(ctx.fwd_cuda_rng_state_tracker)
 
         # Compute the forward pass.
-        detached_inputs = detach_variable(inputs)
+        # detached_inputs = detach_variable(inputs)
         with torch.enable_grad():
-            outputs = ctx.run_function(*detached_inputs)
+            outputs, f_vjp = torch.autograd.vjp(self.run_function, *inputs)
 
         # Set the states back to what it was at the start of this function.
         torch.set_rng_state(bwd_cpu_rng_state)
@@ -264,8 +260,8 @@ class CheckpointFunction(torch.autograd.Function):
 
         # filter out non tensor outputs for backward pass
         outputs, args = zip(*filter(lambda x: torch.is_tensor(x[0]), zip(outputs, args)))
-        torch.autograd.backward(outputs, args)
-        grads = tuple(inp.grad if isinstance(inp, torch.Tensor) else inp for inp in detached_inputs)
+        grads = f_vjp(*args)
+
         return (None, None) + grads
 
 

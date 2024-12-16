@@ -194,7 +194,7 @@ class VocabParallelEmbedding(torch.nn.Module):
                     self.num_embeddings_per_partition,
                     0,
                     init_method,
-                    dtype=config.embedding_dtype,
+                    params_dtype=config.embedding_dtype,
                 )
         else:
             self.weight = Parameter(
