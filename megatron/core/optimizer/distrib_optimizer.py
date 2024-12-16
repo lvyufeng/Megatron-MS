@@ -2,14 +2,14 @@
 
 """Megatron distributed optimizer."""
 
-
+import shutil
+from pathlib import Path
 import itertools
 from logging import getLogger
 from typing import Callable, Dict, List, Optional, Tuple
 
 import torch
-from torch import nn
-from torch.optim import Adam
+from apex.optimizers import FusedAdam as Adam
 
 from .. import parallel_state, tensor_parallel
 from ..dist_checkpointing import ShardedTensor
@@ -21,6 +21,19 @@ from .optimizer_config import OptimizerConfig
 
 logger = getLogger(__name__)
 
+def move_param_map(filename):
+    pt_file_path = Path(filename)
+    for parent_path in pt_file_path.parents:
+        if parent_path.parts[-1].startswith("iter_"):
+            existed_path = list(parent_path.glob('param_map*'))
+            if existed_path:
+                break
+            target_path = parent_path/'param_map'
+            try:
+                shutil.copytree('/cache/buffers/', target_path,dirs_exist_ok=True)
+            except Exception as e:
+                print(f' > WARNING: could not copy param map files. \n{e}')
+    return
 
 class Range:
     """
@@ -294,15 +307,13 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                 param_range = gbuf_range["param_map"][model_param]["param"]
 
                 # fp16, bf16 params.
-                # if model_param.type() in ['torch.cuda.HalfTensor', 'torch.cuda.BFloat16Tensor']:
-                # change for mindspore
-                if model_param.type() in ['Float16', 'BFloat16']:
+                if model_param.type() in ['torch.cuda.HalfTensor', 'torch.cuda.BFloat16Tensor']:
 
                     # Clone model -> main.
-                    shard_model_param = model_param.view(-1)[
+                    shard_model_param = model_param.detach().view(-1)[
                         param_range.start : param_range.end
                     ]
-                    shard_main_param = nn.Parameter(shard_model_param.clone().float())
+                    shard_main_param = shard_model_param.clone().float()
                     tensor_parallel.copy_tensor_model_parallel_attributes(
                         shard_model_param, model_param
                     )
@@ -319,10 +330,8 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                     shard_fp32_from_float16_params_this_group.append(shard_main_param)
 
                 # fp32 params.
-                # elif model_param.type() == 'torch.cuda.FloatTensor':
-                # change for mindspore
-                elif model_param.type() == 'Float32':
-                    shard_model_param = nn.Parameter(model_param.view(-1)[param_range.start : param_range.end])
+                elif model_param.type() == 'torch.cuda.FloatTensor':
+                    shard_model_param = model_param.view(-1)[param_range.start : param_range.end]
                     model_fp32_params_this_group.append(model_param)
                     shard_fp32_params_this_group.append(shard_model_param)
                     tensor_parallel.copy_tensor_model_parallel_attributes(
@@ -493,7 +502,6 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         # - Also, leverage state_dict() and load_state_dict() to
         #   recast preexisting per-param state tensors.
         self.optimizer.param_groups = [g["orig_group"] for g in self.opt_group_ranges]
-
         self.optimizer.load_state_dict(self.optimizer.state_dict())
 
     def enable_pre_hook(self):
@@ -718,6 +726,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
         data_parallel_global_ranks = torch.distributed.get_process_group_ranks(
             self.data_parallel_group_gloo
         )
+
         # Collect param states.
         state = {
             "per_bucket_numel": self.per_bucket_numel,
@@ -758,8 +767,8 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                         gbuf_local_start = param_range_map["gbuf_local"].start
                         gbuf_local_end = param_range_map["gbuf_local"].end
                         for key in local_shards:
-                            local_shards[key][gbuf_local_start:gbuf_local_end].copy_(
-                                tensors[key]
+                            local_shards[key][gbuf_local_start:gbuf_local_end].data.copy_(
+                                tensors[key].detach().cpu()
                             )
 
                     # Gather contiguous shards on DP rank 0.
@@ -775,12 +784,13 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
                             recv_tensors = None
 
                         # Gather.
-                        recv_tensors = torch.distributed.gather(
+                        torch.distributed.gather(
                             send_tensor,
                             recv_tensors,
                             data_parallel_global_ranks[0],
                             data_parallel_group_gloo,
                         )
+
                         # Concatenate.
                         if data_parallel_rank == 0:
                             if key not in world_tensors:
@@ -802,6 +812,7 @@ class DistributedOptimizer(MixedPrecisionOptimizer):
 
         state_dict = self.get_parameter_state_dp_zero()
         if torch.distributed.get_rank(self.data_parallel_group) == 0:
+            move_param_map(filename)
             torch.save(state_dict, filename)
 
     def sharded_state_dict(

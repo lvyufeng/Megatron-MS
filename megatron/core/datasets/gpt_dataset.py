@@ -36,6 +36,9 @@ class GPTDatasetConfig(BlendedMegatronDatasetConfig):
        generates masks by itself.
     """
 
+    dataset_margin: float = 1.005
+    """Option to use 0.5% target margin to ensure we satiate the network """
+
     def __post_init__(self) -> None:
         """Do asserts and set fields post init
         """

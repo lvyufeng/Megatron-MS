@@ -10,7 +10,7 @@ from torch.nn import init
 from torch.nn.parameter import Parameter
 
 from megatron.core.transformer import TransformerConfig
-# from megatron.core.utils import make_viewless_tensor
+from megatron.core.utils import make_viewless_tensor
 
 try:
     from apex.contrib.layer_norm.layer_norm import FastLayerNormFN
@@ -101,16 +101,16 @@ class FusedLayerNorm(torch.nn.Module):
         if hidden_size not in persist_ln_hidden_sizes or not HAVE_PERSIST_LAYER_NORM:
             persist_layer_norm = False
 
-        # if not persist_layer_norm and not HAVE_FUSED_LAYER_NORM:
-        #     # TODO: Add pytorch only layer norm
-        #     raise ValueError(f'Apex must currently be installed to use megatron core.')
+        if not persist_layer_norm and not HAVE_FUSED_LAYER_NORM:
+            # TODO: Add pytorch only layer norm
+            raise ValueError(f'Apex must currently be installed to use megatron core.')
 
         if isinstance(hidden_size, numbers.Integral):
             hidden_size = (hidden_size,)
         self.hidden_size = torch.Size(hidden_size)
         self.eps = eps
-        self.weight = Parameter(torch.randn(*hidden_size))
-        self.bias = Parameter(torch.randn(*hidden_size))
+        self.weight = Parameter(torch.Tensor(*hidden_size))
+        self.bias = Parameter(torch.Tensor(*hidden_size))
         self.reset_parameters()
         self.persist_layer_norm = persist_layer_norm
         self.sequence_parallel = self.config.sequence_parallel
@@ -132,39 +132,38 @@ class FusedLayerNorm(torch.nn.Module):
 
         weight = self.weight + 1 if self.zero_centered_gamma else self.weight
 
-        return torch.nn.functional.layer_norm(input, self.hidden_size, weight, self.bias, self.eps)
-        # if self.persist_layer_norm:
-        #     if 'memory_efficient' in inspect.getfullargspec(FastLayerNormFN.forward).args:
-        #         output = FastLayerNormFN.apply(
-        #             input, weight, self.bias, self.eps, self.config.memory_efficient_layer_norm
-        #         )
-        #     else:
-        #         output = FastLayerNormFN.apply(input, weight, self.bias, self.eps)
+        if self.persist_layer_norm:
+            if 'memory_efficient' in inspect.getfullargspec(FastLayerNormFN.forward).args:
+                output = FastLayerNormFN.apply(
+                    input, weight, self.bias, self.eps, self.config.memory_efficient_layer_norm
+                )
+            else:
+                output = FastLayerNormFN.apply(input, weight, self.bias, self.eps)
 
-        #     # Apex's fast layer norm function outputs a 'view' tensor (i.e., has
-        #     # a populated '_base' field). This will result in schedule.py's
-        #     # deallocate_output_tensor() throwing an error, so a viewless tensor is
-        #     # created to prevent this.
-        #     # output = make_viewless_tensor(
-        #     #     inp=output, requires_grad=input.requires_grad, keep_graph=True
-        #     # )
+            # Apex's fast layer norm function outputs a 'view' tensor (i.e., has
+            # a populated '_base' field). This will result in schedule.py's
+            # deallocate_output_tensor() throwing an error, so a viewless tensor is
+            # created to prevent this.
+            output = make_viewless_tensor(
+                inp=output, requires_grad=input.requires_grad, keep_graph=True
+            )
 
-        # else:
-        #     if (
-        #         'memory_efficient'
-        #         in inspect.getfullargspec(FusedLayerNormAffineFunction.forward).args
-        #     ):
-        #         return FusedLayerNormAffineFunction.apply(
-        #             input,
-        #             weight,
-        #             self.bias,
-        #             self.hidden_size,
-        #             self.eps,
-        #             self.config.memory_efficient_layer_norm,
-        #         )
-        #     else:
-        #         return FusedLayerNormAffineFunction.apply(
-        #             input, weight, self.bias, self.hidden_size, self.eps
-        #         )
+        else:
+            if (
+                'memory_efficient'
+                in inspect.getfullargspec(FusedLayerNormAffineFunction.forward).args
+            ):
+                return FusedLayerNormAffineFunction.apply(
+                    input,
+                    weight,
+                    self.bias,
+                    self.hidden_size,
+                    self.eps,
+                    self.config.memory_efficient_layer_norm,
+                )
+            else:
+                return FusedLayerNormAffineFunction.apply(
+                    input, weight, self.bias, self.hidden_size, self.eps
+                )
 
-        # return output
+        return output

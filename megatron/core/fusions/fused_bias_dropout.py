@@ -4,6 +4,7 @@ from typing import Optional, Tuple
 import torch
 
 from megatron.core.jit import jit_fuser
+from megatron.training import get_args
 
 
 def _bias_dropout_add_func(x_with_bias, residual, prob, training):
@@ -21,7 +22,10 @@ def _bias_dropout_add_func(x_with_bias, residual, prob, training):
     # in fp32, and it will up-cast the result to fp32, causing pipeline parallel
     # GPU communication to hang. Therefore, we need to cast residual to the same
     # dtype as x.
-    residual = residual if residual.dtype == x.dtype else residual.to(x.dtype)
+
+    args = get_args()
+    if not args.fp32_residual_connection:
+        residual = residual if residual.dtype == x.dtype else residual.to(x.dtype)
 
     # The Dropout operation, Residual Addition and the tensor returning can be
     # done generically outside the if statement, but that stops fusing of Bias

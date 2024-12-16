@@ -15,7 +15,7 @@ from ..core.dist_checkpointing.mapping import ShardedObject
 from .global_vars import get_args
 from .utils import (unwrap_model,
                     print_rank_0)
-
+# from pangu.tasks.finetune.lora.utils import is_enable_lora
 
 _CHECKPOINT_VERSION = None
 
@@ -273,6 +273,12 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler,
     # Only rank zero of the data parallel writes to the disk.
     model = unwrap_model(model)
 
+    # Automatically update word embeddings and merge LoRA weights.
+    if isinstance(model, list):
+        [_.eval() for _ in model]
+    else:
+        model.eval()
+
     ckpt_format = args.dist_ckpt_format if args.use_dist_ckpt else 'torch'
     print_rank_0('saving checkpoint at iteration {:7d} to {} in {} format'.format(
         iteration, args.save, ckpt_format))
@@ -322,6 +328,12 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler,
 
     print_rank_0('  successfully saved checkpoint at iteration {:7d} to {}' \
                  .format(iteration, args.save))
+
+    # Automatically unmerge LoRA weights.
+    if isinstance(model, list):
+        [_.train() for _ in model]
+    else:
+        model.train()
 
     # And update the latest iteration
     if not torch.distributed.is_initialized() \
@@ -715,7 +727,16 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
     # Model.
     strict = False if args.retro_add_retriever else strict
     if len(model) == 1:
-        model[0].load_state_dict(state_dict['model'], strict=strict)
+        if args.multimodal:
+            if args.LoRA:
+                model[0].load_state_dict(state_dict['model'], strict=False)
+            else:
+                model[0].load_state_dict(state_dict['model'], strict=strict)
+                # If you used the old ckpt from multimodal_input_ap, you can try using load_state_dict_own
+                # to load:# model[0].load_state_dict_own(state_dict['model'], strict=strict)
+        else:
+            model[0].load_state_dict(state_dict['model'], strict=strict)
+
     else:
         for i in range(len(model)):
             mpu.set_virtual_pipeline_model_parallel_rank(i)

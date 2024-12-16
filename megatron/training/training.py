@@ -34,6 +34,8 @@ from megatron.training.optimizer_param_scheduler import OptimizerParamScheduler
 from megatron.legacy.data.data_samplers import build_pretraining_data_loader
 from megatron.core.transformer.moe.moe_utils import track_moe_metrics
 from megatron.core.pipeline_parallel import get_forward_backward_func
+from pangu.training.utils import freeze_module #
+
 
 from .utils import (
     calc_params_l2_norm,
@@ -88,6 +90,77 @@ def num_floating_point_operations(args, batch_size):
             + (args.padded_vocab_size / (2 * args.num_layers * args.hidden_size))
         )
     )
+
+
+def mm_num_floating_point_operations(args, batch_size):
+    # vit FLOPS
+    resolution, patch_size, seq_len = 448, 14, args.encoder_seq_length
+    vit_seq_len = (resolution // patch_size) ** 2
+    vit_img_nums = seq_len // args.image_token_length
+    vit_bsz = vit_img_nums * batch_size
+    vit_hidden_dim = args.visual_hidden_size
+    vit_num_layers = args.visual_num_layers
+    vit_img_feature_dim = (patch_size ** 2) * 3
+
+    vit_patch_linear_forward_flops = batch_size * vit_seq_len * vit_img_feature_dim * vit_hidden_dim * 2
+    vit_transformer_forward_flops = 24 * vit_bsz * vit_seq_len * (vit_hidden_dim ** 2) + \
+                                    4 * vit_bsz * (vit_seq_len ** 2) * vit_hidden_dim
+
+    vit_forward_flops = vit_num_layers * vit_transformer_forward_flops + vit_patch_linear_forward_flops
+    vit_backward_flops = 2 * vit_forward_flops
+
+    vit_total_flops = vit_forward_flops + vit_backward_flops if args.Unfreeze_ViT else vit_forward_flops
+
+    # c_abs FLOPS
+    ori_h_ori_w = 32
+    new_h_ori_w = 16
+    se_module_intermediate_hidden_dim = 320
+    conv2_group = vit_hidden_dim
+
+    c_abs_forward_flops = (vit_hidden_dim ** 2) * (ori_h_ori_w ** 2) * 4 \
+                          + 3 * 3 * (vit_hidden_dim ** 2) / conv2_group * (ori_h_ori_w ** 2) * 2 \
+                          + vit_hidden_dim * se_module_intermediate_hidden_dim * (ori_h_ori_w ** 2) * 4 \
+                          + (vit_hidden_dim ** 2) * (new_h_ori_w ** 2) * 4 \
+                          + 3 * 3 * (vit_hidden_dim ** 2) / conv2_group * (new_h_ori_w ** 2) * 2 \
+                          + vit_hidden_dim * se_module_intermediate_hidden_dim * (new_h_ori_w ** 2) * 4
+
+    c_abs_forward_flops = c_abs_forward_flops * 2
+    c_abs_backward_flops = 2 * c_abs_forward_flops
+
+    c_abs_total_flops = c_abs_forward_flops + c_abs_backward_flops
+
+    # MLP projection FLOPS
+    mlp_output_seq_len = 256  # args.image_token_length
+    mlp_intermediate_hidden_dim = 2048
+    mlp_final_hidden_dim = args.hidden_size
+
+    mlp_forward_flops = 2 * (vit_bsz * mlp_output_seq_len * vit_hidden_dim * mlp_intermediate_hidden_dim) + \
+                        2 * (vit_bsz * mlp_output_seq_len * mlp_intermediate_hidden_dim * mlp_final_hidden_dim)
+    mlp_backward_flops = 2 * mlp_forward_flops
+
+    mlp_total_flops = mlp_forward_flops + mlp_backward_flops
+
+    # LLM FLOPS
+    word_embedding_vocab_size = args.vocab_size
+    llm_seq_length = args.encoder_seq_length
+    llm_hidden_dim = args.hidden_size
+    word_embedding_flops = 2 * batch_size * llm_seq_length * llm_hidden_dim * word_embedding_vocab_size
+    llm_transformer_flops = 24 * batch_size * llm_seq_length * (llm_hidden_dim ** 2) + \
+                            4 * batch_size * (llm_seq_length ** 2) * llm_hidden_dim
+    llm_transformer_flops = llm_transformer_flops * args.num_layers
+    llm_forward_flops = word_embedding_flops + llm_transformer_flops
+    if args.Unfreeze_LLM:
+        llm_backward_flops = 2 * llm_forward_flops
+    else:
+        llm_backward_flops = llm_forward_flops + \
+                             4 * batch_size * (llm_seq_length ** 2) * llm_hidden_dim * args.num_layers
+
+    llm_total_flops = llm_forward_flops + llm_backward_flops
+
+    # final flops
+    total_flops = vit_total_flops + c_abs_total_flops + mlp_total_flops + llm_total_flops
+
+    return total_flops
 
 
 def append_to_progress_log(string):
@@ -391,22 +464,32 @@ def get_model(model_provider_func, model_type=ModelType.encoder_or_decoder, wrap
         for param in model_module.parameters():
             tensor_parallel.set_defaults_if_not_set_tensor_model_parallel_attributes(param)
 
-    # Print number of parameters.
-    if mpu.get_data_parallel_rank() == 0:
-        print(' > number of parameters on (tensor, pipeline) '
-              'model parallel rank ({}, {}): {}'.format(
-            mpu.get_tensor_model_parallel_rank(),
-            mpu.get_pipeline_model_parallel_rank(),
-            sum([sum([p.nelement() for p in model_module.parameters()])
-                 for model_module in model])), flush=True)
 
     # GPU allocation.
     for model_module in model:
         model_module.cuda(torch.cuda.current_device())
 
     # Fp16 conversion.
-    if args.fp16 or args.bf16:
+    if args.preserve_orig_param_dtype:
+        model = [model_module for model_module in model]
+    elif args.fp16 or args.bf16:
         model = [Float16Module(model_module, args) for model_module in model]
+
+    model = freeze_module(model)
+
+    if mpu.get_data_parallel_rank() == 0:
+        print_rank_0('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        for model_module in model:
+            for name, parameters in model_module.named_parameters():
+                print_rank_0('{} : {} : {} : {}'.format(name, parameters.dtype, parameters.size(), parameters.requires_grad))
+        # Print number of parameters.
+        # print(' > number of parameters on (tensor, pipeline) '
+        #       'model parallel rank ({}, {}): {}'.format(
+        #     mpu.get_tensor_model_parallel_rank(),
+        #     mpu.get_pipeline_model_parallel_rank(),
+        #     sum([sum([p.nelement() for p in model_module.parameters()])
+        #          for model_module in model])), flush=True)
+        # print_rank_0('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
 
     if wrap_with_ddp:
         config = get_model_config(model[0])
@@ -670,6 +753,11 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
     total_iterations = total_loss_dict[advanced_iters_key] + \
                        total_loss_dict[skipped_iters_key]
 
+    # Calculate batch token
+    batch_token = batch_size * args.seq_length
+    if hasattr(args, 'seq_len_in_single_batch') and args.seq_len_in_single_batch is not None:
+        batch_token = batch_size * args.seq_len_in_single_batch
+
     # Tensorboard values.
     # Timer requires all the ranks to call.
     if args.log_timers_to_tensorboard and \
@@ -754,9 +842,14 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
     if iteration % args.log_interval == 0:
         elapsed_time = timers('interval-time').elapsed(barrier=True)
         elapsed_time_per_iteration = elapsed_time / total_iterations
-
-        throughput = num_floating_point_operations(args, batch_size) / (
-            elapsed_time_per_iteration * 10**12 * args.world_size)
+        if args.multimodal:
+            total_flops = mm_num_floating_point_operations(args, batch_size)
+            throughput = total_flops / (
+                    elapsed_time_per_iteration * 10 ** 12 * args.world_size)
+        else:
+            throughput = num_floating_point_operations(args, batch_size) / (
+                    elapsed_time_per_iteration * 10 ** 12 * args.world_size)
+        throughput_per_day = batch_token / elapsed_time_per_iteration * 3600 * 24
         if args.log_timers_to_tensorboard:
             if writer:
                 writer.add_scalar('iteration-time',
@@ -765,10 +858,16 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
                 wandb_writer.log({'iteration-time': elapsed_time_per_iteration},
                                  iteration)
         log_string = f" [{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
-        log_string += ' iteration {:8d}/{:8d} |'.format(
-            iteration, args.train_iters)
+        if args.print_iteration:
+            log_string += ' iteration {:8d}/{:8d} |'.format(
+                iteration + args.print_iteration, args.train_iters + args.print_iteration)
+        else:
+            log_string += ' iteration {:8d}/{:8d} |'.format(
+                iteration, args.train_iters)
         log_string += ' consumed samples: {:12d} |'.format(
             args.consumed_train_samples)
+        if hasattr(args, 'seq_len_in_single_batch') and args.seq_len_in_single_batch is not None:
+            log_string += ' consumed tokens per iteration: {:5d} |'.format(batch_token)
         log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(
             elapsed_time_per_iteration * 1000.0)
         if args.log_throughput:
@@ -778,9 +877,11 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
                     writer.add_scalar('throughput', throughput, iteration)
                 if wandb_writer:
                     wandb_writer.log({'throughput': throughput}, iteration)
+            log_string += f' throughput: {throughput_per_day/1e9:.1f}B tokens/day |'
+        log_string += f' baseline(ms):{args.baseline_time} |'
         assert learning_rate is not None
         # Decoupled_learning_rate should be not None only on first and last pipeline stage.
-        log_string += ' learning rate: {:.6E} |'.format(learning_rate)
+        log_string += ' learning rate: {:.16f} |'.format(learning_rate)
         if args.decoupled_lr is not None and (mpu.is_pipeline_first_stage(ignore_virtual=True) or
                                               mpu.is_pipeline_last_stage(ignore_virtual=True)):
             assert decoupled_learning_rate is not None
@@ -793,12 +894,12 @@ def training_log(loss_dict, total_loss_dict, learning_rate, decoupled_learning_r
                            nan_iters_key]:
                 avg = total_loss_dict[key].item() / \
                       float(max(1, total_loss_dict[advanced_iters_key]))
-                if avg > 0.0:
-                    log_string += ' {}: {:.6E} |'.format(key, avg)
+                if avg > 0.0 or len(total_loss_dict) > 2:
+                    log_string += ' {}: {:.16f} |'.format(key, avg)
                 total_loss_dict[key] = torch.tensor([0.0], dtype=torch.float, device='cuda')
         log_string += ' loss scale: {:.1f} |'.format(loss_scale)
         if grad_norm is not None:
-            log_string += ' grad norm: {:.3f} |'.format(grad_norm)
+            log_string += ' grad norm: {:.16f} |'.format(grad_norm)
         if num_zeros_in_grad is not None:
             log_string += ' num zeros: {:.1f} |'.format(num_zeros_in_grad)
         if params_norm is not None:
@@ -1340,6 +1441,14 @@ def build_train_valid_test_data_loaders(
         if args.train_samples is None:
             args.consumed_valid_samples = (args.iteration // args.eval_interval) * \
                 args.eval_iters * args.global_batch_size
+    
+    if args.new_dataset:
+        print_rank_0('> Iteration from checkpoint is {}. Use --new_dataset to reset '
+                     'args.consumed_train_samples and args.iteration as 0...'.format(args.iteration))
+        args.consumed_train_samples = 0
+        args.print_iteration += args.iteration
+        args.iteration = 0
+        print_rank_0('> Use args.print_iteration {} for printing...'.format(args.print_iteration))
 
     # Rely on distributed-aware core datasets, temporary
     is_distributed = getattr(build_train_valid_test_datasets_provider, "is_distributed", False)

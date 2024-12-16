@@ -9,6 +9,7 @@ from megatron.core.dist_checkpointing.mapping import ShardedStateDict
 from megatron.core.transformer.module import MegatronModule
 from megatron.core.transformer.transformer_config import TransformerConfig
 from megatron.core.utils import make_tp_sharded_tensor_for_checkpoint
+from megatron.training import get_args
 
 
 class LanguageModule(MegatronModule):
@@ -64,11 +65,9 @@ class LanguageModule(MegatronModule):
             return
 
         if self.pre_process and not self.post_process:
-            assert parallel_state.is_pipeline_first_stage()
             self.shared_embedding_or_output_weight().shared_embedding = True
 
         if self.post_process and not self.pre_process:
-            assert not parallel_state.is_pipeline_first_stage()
             # set word_embeddings weights to 0 here, then copy first
             # stage's weights using all_reduce below.
             self.output_layer.weight.data.fill_(0)
@@ -93,7 +92,8 @@ class LanguageModule(MegatronModule):
         if torch.distributed.is_initialized():
             if parallel_state.is_rank_in_embedding_group():
                 weight = self.shared_embedding_or_output_weight()
-                weight.data = weight.data.cuda()
+                args = get_args()
+                weight.data = weight.data.cuda().to(args.embedding_dtype)
                 torch.distributed.all_reduce(
                     weight.data, group=parallel_state.get_embedding_group()
                 )

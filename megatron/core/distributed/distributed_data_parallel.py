@@ -3,12 +3,41 @@
 from contextlib import contextmanager
 from typing import Dict, Optional
 
+import os
 import torch
 
 from .. import parallel_state
 from ..transformer.module import MegatronModule
 from ..transformer.transformer_config import TransformerConfig
 from .param_and_grad_buffer import ParamAndGradBuffer
+
+import json
+
+def save_param_map(data_parallel_group,buffers, filename):
+    dp = torch.distributed.get_rank(data_parallel_group)
+    pp = parallel_state.get_pipeline_model_parallel_rank()
+    tp = parallel_state.get_tensor_model_parallel_rank()
+    if not os.path.exists(filename):
+        os.makedirs(filename, exist_ok=True)
+    for buffer_id, buffer in enumerate(buffers):
+        files = [f for f in os.listdir(filename) if f.startswith(f"param_map_buffer{buffer_id}_dp{dp}tp{tp}pp{pp}vpp")]
+        if not files:
+            vpp = 0
+            map_path = os.path.join(filename,f"param_map_buffer{buffer_id}_dp{dp}tp{tp}pp{pp}vpp{vpp}.json")
+        else:
+            vpp_values = []
+            for f in files:
+                f_parts = f.split(".")
+                vpp = int(f_parts[0].split("vpp")[-1])
+                vpp_values.append(vpp)
+            cur_vpp = max(vpp_values) + 1
+            map_path = os.path.join(filename,f"param_map_buffer{buffer_id}_dp{dp}tp{tp}pp{pp}vpp{cur_vpp}.json")
+        print(f"map_path:{map_path}: {buffer.param_index_map_full}")
+        try:
+            with open(map_path, "w") as outfile:
+                json.dump(buffer.param_index_map_full, outfile)
+        except Exception as e:
+            print(f' > WARNING: could not save param map files. \n{e}')
 
 
 class DistributedDataParallel(MegatronModule):
@@ -138,7 +167,7 @@ class DistributedDataParallel(MegatronModule):
             data_parallel_group,
             gradient_scaling_factor=1.0 / data_parallel_world_size,
         )
-
+        save_param_map(data_parallel_group,self.buffers, "/cache/buffers")
         # Allocate separate param+grad buffers for expert parallel params' grads.
         self.expert_parallel_buffers = allocate_buffers_for_parameters(
             expert_parallel_params,
@@ -162,17 +191,15 @@ class DistributedDataParallel(MegatronModule):
         # Register backward hook.
         # Accumulation function for the gradients need to be stored so they
         # don't go out of scope.
-        # self.grad_accs = [] # mindspore no needed
+        self.grad_accs = []
         for param in self.module.parameters():
             if param.requires_grad:
-                # mindspore no needed.
                 # Expand so we get access to grad_fn.
-                # param_tmp = param.expand_as(param)
-                # # Get the gradient accumulator function.
-                # grad_acc = param_tmp.grad_fn.next_functions[0][0]
-                # grad_acc.register_hook(self._make_param_hook(param, self.param_to_buffer))
-                # self.grad_accs.append(grad_acc)
-                param.register_hook(self._make_param_hook(param, self.param_to_buffer))
+                param_tmp = param.expand_as(param)
+                # Get the gradient accumulator function.
+                grad_acc = param_tmp.grad_fn.next_functions[0][0]
+                grad_acc.register_hook(self._make_param_hook(param, self.param_to_buffer))
+                self.grad_accs.append(grad_acc)
 
     def forward(self, *inputs, **kwargs):
         """
@@ -189,7 +216,7 @@ class DistributedDataParallel(MegatronModule):
         Creates the all-reduce / reduce-scatter hook for backprop.
         """
 
-        def param_hook(grad):
+        def param_hook(*unused):
             if param.requires_grad:
                 if self.overlap_grad_reduce:
                     assert (
@@ -198,7 +225,7 @@ class DistributedDataParallel(MegatronModule):
                 if param.grad is not None and (
                     not param.grad_added_to_main_grad or getattr(param, 'zero_out_wgrad', False)
                 ):
-                    param.main_grad.add_(grad)
+                    param.main_grad.add_(param.grad.data)
                 param.grad = None
 
                 if self.overlap_grad_reduce:

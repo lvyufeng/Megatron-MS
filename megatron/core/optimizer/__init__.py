@@ -3,8 +3,10 @@ from logging import getLogger
 from typing import Callable, Dict, List, Optional
 
 import torch
-from torch.optim import Adam, SGD
+from apex.optimizers import FusedAdam as Adam
+from apex.optimizers import FusedSGD as SGD
 
+# from torch.optim import AdamW
 from megatron.core import mpu
 
 from ..distributed import ParamAndGradBuffer
@@ -72,13 +74,13 @@ def _get_param_groups(
                 scale_lr = False
 
             if not no_wd and not scale_lr:
-                wd_mult, lr_mult = 1.0, 1.0
+                wd_mult, _lr_mult = 1.0, 1.0
             elif not no_wd and scale_lr:
-                wd_mult, lr_mult = 1.0, lr_mult
+                wd_mult, _lr_mult = 1.0, lr_mult
             elif no_wd and not scale_lr:
-                wd_mult, lr_mult = 0.0, 1.0
+                wd_mult, _lr_mult = 0.0, 1.0
             else:
-                wd_mult, lr_mult = 0.0, lr_mult
+                wd_mult, _lr_mult = 0.0, lr_mult
 
             is_decoupled_lr = False
             # For input/embedding and output layer: embedding.word_embeddings.weight / output_layer.weight.
@@ -87,19 +89,19 @@ def _get_param_groups(
             ):
                 is_decoupled_lr = True
 
-            key = (wd_mult, lr_mult, is_expert_parallel, is_decoupled_lr)
+            key = (wd_mult, _lr_mult, is_expert_parallel, is_decoupled_lr)
             if key not in params_map:
                 params_map[key] = []
             params_map[key].append(param)
 
     param_groups = []
-    for (wd_mult, lr_mult, is_expert_parallel, is_decoupled_lr), params in params_map.items():
+    for (wd_mult, _lr_mult, is_expert_parallel, is_decoupled_lr), params in params_map.items():
         assert len(params) > 0
         param_groups.append(
             {
                 'params': params,
                 'wd_mult': wd_mult,
-                'lr_mult': lr_mult,
+                'lr_mult': _lr_mult,
                 'is_expert_parallel': is_expert_parallel,
                 'is_decoupled_lr': is_decoupled_lr,
             }
@@ -295,6 +297,16 @@ def get_megatron_optimizer(
         decoupled_min_lr=config.decoupled_min_lr,
     )
 
+    # Fake params to construct optmizer
+    if len(param_groups) == 0:
+        device = next(model_chunks[0].parameters()).device
+        fake_params = torch.zeros([1,], dtype=torch.float, requires_grad=True, device=device)
+        fake_params.fake = True
+        fake_params.grad = fake_params.clone()
+        fake_params.main_grad = fake_params.clone()
+        param_groups.append({'params': fake_params, 'wd_mult': 0.0, 'lr_mult': 0.0})
+
+
     # Collect grad buffers for distributed optimizer.
     per_model_buffers = {}
     per_model_ep_buffers = {}
@@ -305,8 +317,13 @@ def get_megatron_optimizer(
 
     # Split param groups into dense and MoE params (since data-parallel groups for MoE
     # parameters can be different with expert parallelism).
-    dense_param_groups = list(filter(lambda g: not g['is_expert_parallel'], param_groups))
-    moe_param_groups = list(filter(lambda g: g['is_expert_parallel'], param_groups))
+    try:
+        dense_param_groups = list(filter(lambda g: not g['is_expert_parallel'], param_groups))
+        moe_param_groups = list(filter(lambda g: g['is_expert_parallel'], param_groups))
+    except Exception as e:
+        print(f"An error occurred in get_megatron_optimizer: {e}")
+        dense_param_groups = param_groups
+        moe_param_groups = []
 
     # Create optimizers.
     model_parallel_rank = torch.distributed.get_rank(mpu.get_model_parallel_group())

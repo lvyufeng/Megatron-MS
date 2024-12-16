@@ -7,6 +7,7 @@ from .layers import (
     copy_tensor_model_parallel_attributes,
     linear_with_grad_accumulation_and_async_allreduce,
     param_is_not_tensor_parallel_duplicate,
+    linear_with_frozen_weight,
     set_defaults_if_not_set_tensor_model_parallel_attributes,
     set_tensor_model_parallel_attributes,
 )
@@ -23,6 +24,8 @@ from .mappings import (
     reduce_scatter_to_sequence_parallel_region_from_moe,
     scatter_to_sequence_parallel_region,
     scatter_to_tensor_model_parallel_region,
+    reduce_from_tensor_model_parallel_region,
+    reduce_scatter_to_sequence_parallel_region,
 )
 from .random import (
     checkpoint,
@@ -49,12 +52,14 @@ __all__ = [
     "set_defaults_if_not_set_tensor_model_parallel_attributes",
     "copy_tensor_model_parallel_attributes",
     "param_is_not_tensor_parallel_duplicate",
+    "linear_with_frozen_weight",
     "linear_with_grad_accumulation_and_async_allreduce",
     # mappings.py
     "copy_to_tensor_model_parallel_region",
     "gather_from_tensor_model_parallel_region",
     "gather_from_sequence_parallel_region",
-    #    "reduce_from_tensor_model_parallel_region",
+    "reduce_scatter_to_sequence_parallel_region",
+    "reduce_from_tensor_model_parallel_region",
     "scatter_to_tensor_model_parallel_region",
     "scatter_to_sequence_parallel_region",
     # random.py

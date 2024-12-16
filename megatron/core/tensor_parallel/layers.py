@@ -10,8 +10,8 @@ import warnings
 from typing import Any, Callable, List, Optional, Tuple
 
 import torch
-from torch.nn import functional as F
-from torch.nn import init
+import torch.nn.functional as F
+import torch.nn.init as init
 from torch.cuda.amp import custom_bwd, custom_fwd
 from torch.nn.parameter import Parameter
 
@@ -136,11 +136,8 @@ def _initialize_affine_weight_cpu(
 
     with torch.no_grad():
         # all tensors must live on the same device
-        # cpu_weight = torch.cat(my_weight_list, dim=partition_dim).to_dense()
-        # weight.data.copy_(cpu_weight)
-        cpu_weight = torch.cat(my_weight_list, dim=partition_dim)
-        weight.assign_value(cpu_weight)
-
+        cpu_weight = torch.cat(my_weight_list, dim=partition_dim).to_dense()
+        weight.data.copy_(cpu_weight)
     if return_master_weight:
         return master_weight
     return None
@@ -186,7 +183,7 @@ class VocabParallelEmbedding(torch.nn.Module):
         if config.use_cpu_initialization:
             self.weight = Parameter(
                 torch.empty(
-                    self.num_embeddings_per_partition, self.embedding_dim, dtype=config.params_dtype
+                    self.num_embeddings_per_partition, self.embedding_dim, dtype=config.embedding_dtype
                 )
             )
             if config.perform_initialization:
@@ -197,7 +194,7 @@ class VocabParallelEmbedding(torch.nn.Module):
                     self.num_embeddings_per_partition,
                     0,
                     init_method,
-                    params_dtype=config.params_dtype,
+                    dtype=config.embedding_dtype,
                 )
         else:
             self.weight = Parameter(
@@ -205,7 +202,7 @@ class VocabParallelEmbedding(torch.nn.Module):
                     self.num_embeddings_per_partition,
                     self.embedding_dim,
                     device=torch.cuda.current_device(),
-                    dtype=config.params_dtype,
+                    dtype=config.embedding_dtype,
                 )
             )
             if config.perform_initialization:
@@ -339,10 +336,10 @@ def linear_with_frozen_weight(
 class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
     """See linear_with_grad_accumulation_and_async_allreduce"""
 
-    # @staticmethod
+    @staticmethod
     @custom_fwd
     def forward(
-        self, # ctx,
+        ctx,
         input,
         weight,
         bias,
@@ -351,12 +348,12 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
         sequence_parallel,
         grad_output_buffer,
     ):
-        self.save_for_backward(input, weight)
-        self.use_bias = bias is not None
-        self.gradient_accumulation_fusion = gradient_accumulation_fusion
-        self.async_grad_allreduce = async_grad_allreduce
-        self.sequence_parallel = sequence_parallel
-        self.grad_output_buffer = grad_output_buffer
+        ctx.save_for_backward(input, weight)
+        ctx.use_bias = bias is not None
+        ctx.gradient_accumulation_fusion = gradient_accumulation_fusion
+        ctx.async_grad_allreduce = async_grad_allreduce
+        ctx.sequence_parallel = sequence_parallel
+        ctx.grad_output_buffer = grad_output_buffer
 
         if sequence_parallel:
             world_size = get_tensor_model_parallel_world_size()
@@ -376,13 +373,12 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             output = output + bias
         return output
 
-    # @staticmethod
+    @staticmethod
     @custom_bwd
-    # def backward(ctx, grad_output):
-    def backward(self, grad_output):
-        input, weight = self.saved_tensors.pop(0) # ctx.saved_tensors
-        use_bias = self.use_bias
-        grad_output_buffer = self.grad_output_buffer
+    def backward(ctx, grad_output):
+        input, weight = ctx.saved_tensors
+        use_bias = ctx.use_bias
+        grad_output_buffer = ctx.grad_output_buffer
 
         wgrad_compute = True
         if grad_output_buffer is not None:
@@ -390,7 +386,7 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             wgrad_compute = False
 
         if wgrad_compute:
-            if self.sequence_parallel:
+            if ctx.sequence_parallel:
                 world_size = get_tensor_model_parallel_world_size()
                 dim_size = list(input.size())
                 dim_size[0] = dim_size[0] * world_size
@@ -409,7 +405,7 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
                 total_input = input
         grad_input = grad_output.matmul(weight)
 
-        if self.sequence_parallel and wgrad_compute:
+        if ctx.sequence_parallel and wgrad_compute:
             handle.wait()
 
         if wgrad_compute:
@@ -417,7 +413,7 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
                 grad_output, total_input
             )
 
-        if self.async_grad_allreduce:
+        if ctx.async_grad_allreduce:
             # Asynchronous all-reduce
             handle = torch.distributed.all_reduce(
                 grad_input, group=get_tensor_model_parallel_group(), async_op=True
@@ -425,8 +421,8 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             # Here we rely on CUDA_DEVICE_MAX_CONNECTIONS=1 to ensure that the
             # all-reduce is scheduled before the weight gradient computation
 
-        if self.sequence_parallel:
-            assert not self.async_grad_allreduce
+        if ctx.sequence_parallel:
+            assert not ctx.async_grad_allreduce
             dim_size = list(input.size())
             sub_grad_input = torch.empty(
                 dim_size, dtype=input.dtype, device=torch.cuda.current_device(), requires_grad=False
@@ -438,7 +434,7 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             # Here we rely on CUDA_DEVICE_MAX_CONNECTIONS=1 to ensure that the
             # reduce scatter is scheduled before the weight gradient computation
 
-        if self.gradient_accumulation_fusion:
+        if ctx.gradient_accumulation_fusion:
             if wgrad_compute:
                 if weight.main_grad.dtype == torch.float32:
                     fused_weight_gradient_mlp_cuda.wgrad_gemm_accum_fp32(
@@ -477,13 +473,13 @@ class LinearWithGradAccumulationAndAsyncCommunication(torch.autograd.Function):
             grad_weight = grad_output.t().matmul(total_input)
         grad_bias = grad_output.sum(dim=0) if use_bias else None
 
-        if self.sequence_parallel:
+        if ctx.sequence_parallel:
             handle.wait()
             # Need to return None's as gradient has to flow for all the input arguments
             # provided during forward
             return sub_grad_input, grad_weight, grad_bias, None, None, None, None
 
-        if self.async_grad_allreduce:
+        if ctx.async_grad_allreduce:
             handle.wait()
 
         return grad_input, grad_weight, grad_bias, None, None, None, None
@@ -792,7 +788,7 @@ class ColumnParallelLinear(torch.nn.Module):
         bias = self.bias if not self.skip_bias_add else None
 
         if (
-            self.async_tensor_model_parallel_allreduce
+            (self.async_tensor_model_parallel_allreduce and weight.requires_grad)
             or self.sequence_parallel
             or self.explicit_expert_comm
         ):

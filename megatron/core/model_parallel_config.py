@@ -68,6 +68,9 @@ class ModelParallelConfig:
     params_dtype: torch.dtype = torch.float32
     """dtype used when intializing the weights."""
 
+    embedding_dtype: torch.dtype = torch.float32
+    """dtype used when intializing the embedding weights."""
+ 
     timers: Callable = None
     """Timers object to call for various timing functions. See megatron.core.timers.Timers"""
 

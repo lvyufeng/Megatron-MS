@@ -16,6 +16,7 @@ from torch.distributed.checkpoint import FileSystemWriter
 from torch.distributed.checkpoint.filesystem import DEFAULT_SUFFIX, _StoragePrefix, _write_item
 from torch.distributed.checkpoint.planner import SavePlan, SavePlanner, WriteItem, WriteItemType
 from torch.distributed.checkpoint.storage import WriteResult
+from torch.futures import Future
 
 logger = logging.getLogger(__name__)
 
@@ -90,11 +91,10 @@ class FileSystemWriterAsync(FileSystemWriter):
                 if item.type == WriteItemType.BYTE_IO
             ]
             tensor_data = [
-                (item, planner.resolve_data(item))
+                (item, planner.resolve_data(item).detach().to("cpu", non_blocking=True))
                 for item in bucket
                 if item.type != WriteItemType.BYTE_IO
             ]
-
             if len(bytes_data) > 0 or len(tensor_data) > 0:
                 file_name = gen_file()
                 self.write_buckets.append(
@@ -140,20 +140,18 @@ class FileSystemWriterAsync(FileSystemWriter):
         Returns: None
         """
         w_start = time()
-        # ctx = mp.get_context('fork')
-        # p_list = [
-        #     ctx.Process(
-        #         target=FileSystemWriterAsync.write_preloaded_data,
-        #         args=(i, write_bucket, write_results, True),
-        #     )
-        #     for i, write_bucket in enumerate(write_buckets)
-        # ]
-        # for p in p_list:
-        #     p.start()
-        # for p in p_list:
-        #     p.join()
-        for i, write_bucket in enumerate(write_buckets):
-            FileSystemWriterAsync.write_preloaded_data(i, write_bucket, write_results, True)
+        ctx = mp.get_context('fork')
+        p_list = [
+            ctx.Process(
+                target=FileSystemWriterAsync.write_preloaded_data,
+                args=(i, write_bucket, write_results, True),
+            )
+            for i, write_bucket in enumerate(write_buckets)
+        ]
+        for p in p_list:
+            p.start()
+        for p in p_list:
+            p.join()
 
         w_end = time()
         logger.debug(
@@ -180,6 +178,7 @@ class FileSystemWriterAsync(FileSystemWriter):
         Returns: None, the write result are written to the `write_results` dict
         """
         mem_before = _process_memory()
+
         local_results = []
         file_name, storage_key, (bytes_data, tensor_data) = write_bucket
         with open(file_name, "wb") as stream:
@@ -187,7 +186,7 @@ class FileSystemWriterAsync(FileSystemWriter):
                 local_results.append(_write_item(stream, data, write_item, storage_key))
 
             for write_item, tensor in tensor_data:
-                # assert tensor.is_cpu
+                assert tensor.is_cpu
                 local_results.append(_write_item(stream, tensor, write_item, storage_key))
 
             if use_fsync:
@@ -195,10 +194,10 @@ class FileSystemWriterAsync(FileSystemWriter):
         write_results[local_proc_idx] = local_results
         mem_after = _process_memory()
         logger.debug(
-            f"{local_proc_idx} consu med: {mem_after - mem_before}, before: {mem_before}, after: {mem_after}"
+            f"{local_proc_idx} consumed: {mem_after - mem_before}, before: {mem_before}, after: {mem_after}"
         )
 
-    def write_data(self, plan: SavePlan, planner: SavePlanner,):
+    def write_data(self, plan: SavePlan, planner: SavePlanner,) -> Future[List[WriteResult]]:
         raise NotImplementedError('write_data not implemented for FileSystemWriterAsync')
 
     def retrieve_write_results(self) -> List[WriteResult]:

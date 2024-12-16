@@ -14,6 +14,7 @@ import torch
 from torch import Tensor, nn
 
 from megatron.core import parallel_state
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +29,23 @@ except:
     HAVE_APPLY_ROPE_FUSION = False
 
 
-__all__ = ['RotaryEmbedding', 'apply_rotary_pos_emb']
+__all__ = ['RotaryEmbedding', 'apply_rotary_pos_emb', 'RoPEClassic']
 
+_ROTATION_MATRIX = None
+def get_rotation_matrix(x):
+    global _ROTATION_MATRIX
+    if _ROTATION_MATRIX is None:
+        import numpy as np
+        dim = x.shape[-1]
+        index1 = np.ones(dim)
+        index1[::2] = 0
+        index2 = np.zeros(dim)
+        index2[::2] = -1
+        rotation_matrix = np.eye(dim, k=1) * index1 + np.eye(dim, k=-1) * index2
+        _ROTATION_MATRIX = (
+            torch.from_numpy(rotation_matrix[None, None, :, :]).to(x.dtype).to(x.device)
+        )
+    return _ROTATION_MATRIX
 
 def get_pos_emb_on_this_cp_rank(pos_emb, seq_dim):
     cp_size = parallel_state.get_context_parallel_world_size()
@@ -44,6 +60,59 @@ def get_pos_emb_on_this_cp_rank(pos_emb, seq_dim):
     pos_emb = pos_emb.view(*pos_emb.shape[:seq_dim], -1, *pos_emb.shape[(seq_dim + 2) :])
     return pos_emb
 
+class RoPEClassic(nn.Module):
+    __cos_encoding = None
+    __sin_encoding = None
+    __rotation_matrix = None
+
+    def __init__(self, kv_channels, max_seq_len, dtype, base=10000.0):
+        super().__init__()
+        self.dim = kv_channels
+        self.max_seq_len = max_seq_len
+        exponent = torch.floor(
+            torch.arange(0, self.dim, dtype=torch.float32).to(torch.npu.current_device()) / 2.
+        ) * 2. / self.dim
+        self.theta = 1.0 / (base ** exponent)#.float()
+        if self.__cos_encoding is None:
+            self._set_cos_sin_encoding(max_seq_len, dtype)
+        if self.__rotation_matrix is None:
+            self._set_rotation_matrix(dtype)
+
+    def _set_cos_sin_encoding(self, max_seq_len, dtype):
+        self.max_seq_len = max_seq_len
+        position_idx = torch.arange(self.max_seq_len, dtype=torch.float32, device=self.theta.device)
+        _encoding = torch.outer(position_idx, self.theta)
+        RoPEClassic.__cos_encoding = _encoding.cos()[:, None, None, :].to(dtype)
+        RoPEClassic.__sin_encoding = _encoding.sin()[:, None, None, :].to(dtype)
+
+    def _set_rotation_matrix(self, dtype):
+        index1 = np.ones(self.dim)
+        index1[::2] = 0
+        index2 = np.zeros(self.dim)
+        index2[::2] = -1
+        rotation_matrix = np.eye(self.dim, k=1) * index1 + np.eye(self.dim, k=-1) * index2
+        RoPEClassic.__rotation_matrix = (
+            torch.from_numpy(rotation_matrix[None, None, :, :]).to(torch.float32).to(self.theta.device)
+        )
+    # @staticmethod
+    # def rotate_half(x):
+    #     x1 = x[..., ::2]
+    #     x2 = x[..., 1::2]
+    #     return torch.cat((-x2[..., None], x1[..., None]), dim=-1).reshape(x.shape)
+
+    def rotate_half(self, x):
+        # [s, b, n_attn_head/tp, dim]
+        return torch.matmul(x, self.__rotation_matrix.to(x.dtype))
+
+    def forward(self, x, offset=0):
+        seq_len = x.size(0) + offset
+        if seq_len > self.max_seq_len:
+            # [hmhm] add warning of over max_seq_len here
+            self._set_cos_sin_encoding(seq_len, x.dtype)
+        _cos_encoding = self.__cos_encoding[offset: seq_len, ...].to(x.dtype)
+        _sin_encoding = self.__sin_encoding[offset: seq_len, ...].to(x.dtype)
+
+        return x * _cos_encoding + self.rotate_half(x) * _sin_encoding
 
 class RotaryEmbedding(nn.Module):
     """Rotary Embedding for language model.
@@ -164,10 +233,7 @@ def _rotate_half(x: Tensor, rotary_interleaved: bool) -> Tensor:
         x1, x2 = torch.chunk(x, 2, dim=-1)
         return torch.cat((-x2, x1), dim=-1)
     else:
-        x1 = x[:, :, :, ::2]
-        x2 = x[:, :, :, 1::2]
-        x_new = torch.stack((-x2, x1), dim=-1)
-        return x_new.view(x_new.shape[0], x_new.shape[1], x_new.shape[2], -1)
+        return torch.matmul(x, get_rotation_matrix(x))
 
 
 def apply_rotary_pos_emb_bshd(t: Tensor, freqs: Tensor, rotary_interleaved: bool = False) -> Tensor:
@@ -231,12 +297,12 @@ def apply_rotary_pos_emb(
     if config.apply_rope_fusion and not HAVE_APPLY_ROPE_FUSION:
         # setting apply_rope_fusion in config to False so that subsequent queries to this config also return False
         config.apply_rope_fusion = False
-        if not getattr(apply_rotary_pos_emb, "printed_fused_warning", False):
-            logger.warning(
-                "Setting apply_rope_fusion to false because its implementation"
-                " is not included in Apex. Try upgrading to the latest version"
-            )
-            apply_rotary_pos_emb.printed_fused_warning = True
+        # if not getattr(apply_rotary_pos_emb, "printed_fused_warning", False):
+        #     logger.warning(
+        #         "Setting apply_rope_fusion to false because its implementation"
+        #         " is not included in Apex. Try upgrading to the latest version"
+        #     )
+        #     apply_rotary_pos_emb.printed_fused_warning = True
     if config.apply_rope_fusion:
         if cu_seqlens is None:
             return fused_apply_rotary_pos_emb(t, freqs, transpose_output_memory=True)

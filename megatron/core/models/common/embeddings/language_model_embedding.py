@@ -8,7 +8,7 @@ from torch import Tensor
 from megatron.core import tensor_parallel
 from megatron.core.transformer.module import MegatronModule
 from megatron.core.transformer.transformer_config import TransformerConfig
-
+from megatron.training import get_args
 
 class LanguageModelEmbedding(MegatronModule):
     """Language model embeddings.
@@ -32,7 +32,7 @@ class LanguageModelEmbedding(MegatronModule):
         num_tokentypes: int = 0,
     ):
         super().__init__(config=config)
-
+        self.args = get_args()
         self.config: TransformerConfig = config
         self.vocab_size: int = vocab_size
         self.max_sequence_length: int = max_sequence_length
@@ -114,7 +114,7 @@ class LanguageModelEmbedding(MegatronModule):
             embeddings = embeddings.float()
 
         # Dropout.
-        if self.config.sequence_parallel:
+        if self.config.sequence_parallel and not self.args.multimodal:
             embeddings = tensor_parallel.scatter_to_sequence_parallel_region(embeddings)
             # `scatter_to_sequence_parallel_region` returns a view, which prevents
             # the original tensor from being garbage collected. Clone to facilitate GC.

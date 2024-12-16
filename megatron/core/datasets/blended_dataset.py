@@ -77,7 +77,6 @@ class BlendedDataset(torch.utils.data.Dataset):
 
         self.dataset_index, self.dataset_sample_index = self._build_indices()
 
-        print(self.size)
         # Check size
         _ = self[self.size - 1]
         try:
@@ -92,7 +91,6 @@ class BlendedDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx: int) -> Dict[str, Union[int, numpy.ndarray]]:
         dataset_id = self.dataset_index[idx]
         dataset_sample_id = self.dataset_sample_index[idx]
-        print(self.datasets)
         return {
             "dataset_id": dataset_id,
             **self.datasets[dataset_id][dataset_sample_id],
