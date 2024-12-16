@@ -1,7 +1,6 @@
 import torch as torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-from torch.common._inner import _inplace_limit_pynative
 
 def drop_block2d(
     input: Tensor, p: float, block_size: int, inplace: bool = False, eps: float = 1e-06, training: bool = True
@@ -24,7 +23,7 @@ def drop_block2d(
     """
     # if not torch.jit.is_scripting() and not torch.jit.is_tracing():
     #     _log_api_usage_once(drop_block2d)
-    _inplace_limit_pynative(inplace, "drop_block2d")
+    # _inplace_limit_pynative(inplace, "drop_block2d")
     if p < 0.0 or p > 1.0:
         raise ValueError(f"drop probability has to be between 0 and 1, but got {p}.")
     if input.ndim != 4:
@@ -71,7 +70,7 @@ def drop_block3d(
     """
     # if not torch.jit.is_scripting() and not torch.jit.is_tracing():
     #     _log_api_usage_once(drop_block3d)
-    _inplace_limit_pynative(inplace, "drop_block3d")
+    # _inplace_limit_pynative(inplace, "drop_block3d")
     if p < 0.0 or p > 1.0:
         raise ValueError(f"drop probability has to be between 0 and 1, but got {p}.")
     if input.ndim != 5:

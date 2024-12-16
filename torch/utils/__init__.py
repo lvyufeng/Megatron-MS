@@ -4,6 +4,8 @@ import numpy as np
 import mindspore
 from ..configs import DEFAULT_DTYPE, GENERATOR_SEED
 
+import mindspore as ms
+
 def set_default_dtype(dtype):
     """set default dtype"""
     global DEFAULT_DTYPE
@@ -19,3 +21,7 @@ def manual_seed(seed):
     mindspore.set_seed(seed)
     if GENERATOR_SEED:
         mindspore.manual_seed(seed)
+
+def use_deterministic_algorithms(flag: bool):
+
+    ms.set_context(deterministic='ON' if flag else 'OFF')

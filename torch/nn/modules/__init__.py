@@ -19,3 +19,4 @@ from .upsampling import Upsample, UpsamplingBilinear2d, UpsamplingNearest2d
 from .loss import *
 from .distance import *
 from .adaptive import AdaptiveLogSoftmaxWithLoss
+from .batchnorm import BatchNorm1d, BatchNorm2d, BatchNorm3d

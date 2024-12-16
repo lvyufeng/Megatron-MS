@@ -60,7 +60,7 @@ def complete_box_iou_loss(
     h_gt = y2g - y1g
     v = (4 / (torch.pi ** 2)) * torch.pow((torch.atan(w_gt / h_gt) - torch.atan(w_pred / h_pred)), 2)
     # TODO:
-     with torch.no_grad():
+    with torch.no_grad():
         alpha = v / (1 - iou + v + eps)
     # alpha = v / (1 - iou + v + eps)
     # alpha = cast_to_adapter_tensor(ms.ops.stop_gradient(alpha))

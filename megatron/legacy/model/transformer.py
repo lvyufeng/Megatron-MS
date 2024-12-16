@@ -1811,3 +1811,14 @@ class ParallelTransformer(MegatronModule):
             state_dict_[newkey] = state_dict[key]
 
         super().load_state_dict(state_dict_, strict)
+
+
+class FastGELU(torch.nn.Module):
+    """
+    Applies GELU approximation that is the same as mindspore
+    """
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        abs_value = torch.abs(input)
+        return input * torch.sigmoid(1.702 * abs_value) * torch.exp(
+            0.851 * (input - abs_value))

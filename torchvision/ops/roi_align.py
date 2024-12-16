@@ -4,7 +4,7 @@ import mindspore as ms
 import torch as torch
 from torch import nn, Tensor
 from torch.nn.modules.utils import _pair
-from torch.logging import warning
+import logging
 from mindspore.ops._primitive_cache import _get_cache_prim
 
 from ._utils import convert_boxes_to_roi_format, check_roi_boxes_shape
@@ -60,7 +60,7 @@ def roi_align(
     roi_end_mode = 0
     if aligned:
         roi_end_mode = 1
-        warning(
+        logging.warning(
             "The implementation of 'roi_align' is not completely consistent with torch when 'aligned' is " \
             "set to True. If you are training the network, you can ignore this alarm, and if you are comparing " \
             "the accuracy of the results, please configure both parties to False. Please refer " \
