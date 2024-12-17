@@ -67,3 +67,18 @@ def _rebuild_tensor_v2(
     metadata=None,
 ):
     pass
+
+def is_version_ge(current_version, base_version):
+    version_split_char = '.'
+    if version_split_char not in base_version or version_split_char not in current_version:
+        raise ValueError("The version string will conain the '.'."
+                         "For example, current_version 1.8.1, base_version 1.11.0.")
+    for x, y in zip(current_version.split(version_split_char), base_version.split(version_split_char)):
+        if not x.isdigit() or not y.isdigit():
+            continue
+        if int(x) != int(y):
+            return int(x) >= int(y)
+    return True
+
+def check_valid_version(valid_version):
+    return is_version_ge(mindspore.__version__, valid_version)

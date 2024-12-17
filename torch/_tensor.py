@@ -3,7 +3,16 @@ import mindspore
 from mindspore import Tensor, ops
 from mindspore.common._stub_tensor import StubTensor
 from mindspore._c_expression import Tensor as Tensor_
-from ._utils import _rebuild_tensor_v2
+from ._utils import _rebuild_tensor_v2, check_valid_version
+
+
+def retain_grad(self):
+    def _tensor_hook(grad):
+        self.grad = grad
+    self.register_hook(_tensor_hook)
+
+Tensor.retain_grad = retain_grad
+StubTensor.retain_grad = retain_grad
 
 def numel(self):
     return ops.size(self)
@@ -101,3 +110,19 @@ def detach(self):
 
 Tensor.detach = detach
 StubTensor.detach = detach
+
+Tensor.transpose = Tensor.swapaxes
+StubTensor.transpose = StubTensor.swapaxes
+
+def masked_fill_(self, mask, value):
+    self.masked_fill(mask, value)
+
+Tensor.masked_fill_ = masked_fill_
+StubTensor.masked_fill_ = masked_fill_
+
+def bfloat16(self):
+    return self.to(mindspore.bfloat16)
+
+if not check_valid_version('2.4.1'):
+    Tensor.bfloat16 = bfloat16
+    StubTensor.bfloat16 = bfloat16
