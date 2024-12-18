@@ -275,6 +275,8 @@ def backward_step(input_tensor, output_tensor, output_tensor_grad, model_type, c
     # init dout if in last stage
     if output_tensor_grad[0] is None and config.grad_scale_func is not None:
         output_tensor_grad[0] = config.grad_scale_func(torch.ones_like(output_tensor[0]))
+    if output_tensor_grad[0] is None:
+        output_tensor_grad[0] = torch.ones_like(output_tensor[0])
 
     # set input tensor for backpropagation
     if not parallel_state.is_pipeline_first_stage():

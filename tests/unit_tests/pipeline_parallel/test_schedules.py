@@ -22,18 +22,19 @@ def test_deallocate_output_tensor():
     out = torch.tensor([[1, 2, 3], [4, 5, 6]])
     schedule.deallocate_output_tensor(out)
     assert(out.nelement() == 6) 
-""" 
+
 def test_forward_backward_func_without_pipeline_parallel(mocker):
     from megatron.core.pipeline_parallel import get_forward_backward_func
+    import mindspore
 
     Utils.initialize_model_parallel(tensor_model_parallel_size=2, pipeline_model_parallel_size=1)
 
     def forward_step_func(data_iterator, model):
         import os
-        rank = int(os.environ['LOCAL_RANK'])
+        rank = int(os.environ['RANK_ID'])
         dummy_data = torch.ones(1,4)
         def loss_func(output_tensor):
-            return rank, {'loss_reduced':rank}
+            return mindspore.Tensor(rank), {'loss_reduced':rank}
         return model(dummy_data), loss_func
 
     model = torch.nn.Linear(4,1)
@@ -68,14 +69,14 @@ def test_forward_backward_func_without_pipeline_parallel(mocker):
 
 def test_forward_backward_func_with_pipeline_parallel(mocker):
     from megatron.core.pipeline_parallel import get_forward_backward_func
-
+    import mindspore
     Utils.initialize_model_parallel(tensor_model_parallel_size=1, pipeline_model_parallel_size=4)
 
     def forward_step_func(data_iterator, model):
         import os
-        rank = int(os.environ['LOCAL_RANK'])
+        rank = int(os.environ['RANK_ID'])
         def loss_func(output_tensor):
-            return rank, {'loss_reduced':rank}
+            return mindspore.Tensor(rank), {'loss_reduced':rank}
         return torch.rand(512,8,256).cuda(), loss_func
 
     model = torch.nn.Linear(4,1)
@@ -93,14 +94,15 @@ def test_forward_backward_func_with_pipeline_parallel(mocker):
 
     config = ModelParallelConfig(
         pipeline_model_parallel_size = 4,
-        sequence_parallel = False
+        sequence_parallel = False,
+        pipeline_dtype=torch.float,
     )
+    config.hidden_size = hidden_size
     model.config = config
     
     losses_reduced = forward_backward_func(
         forward_step_func=forward_step_func,
         data_iterator=None,
-        dtype=torch.float32,
         model=[model],
         num_microbatches= micro_batch_size,
         seq_length=sequence_length,
@@ -113,7 +115,7 @@ def test_forward_backward_func_with_pipeline_parallel(mocker):
         assert(i['loss_reduced'] == j['loss_reduced'])
     Utils.destroy_model_parallel()  
 
-
+"""
 def test_forward_backward_func_with_interleaving(mocker):
     from megatron.core.pipeline_parallel import get_forward_backward_func
     from megatron.core.enums import ModelType

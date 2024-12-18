@@ -5,7 +5,7 @@ import megatron.core.parallel_state as ps
 class Utils:
 
     world_size = torch.cuda.device_count()
-    rank = None
+    rank = int(os.environ['RANK_ID'])
 
     @staticmethod
     def initialize_distributed():
@@ -18,8 +18,6 @@ class Utils:
             init_method += master_ip + ':' + master_port
             torch.distributed.init_process_group(backend='hccl', world_size=Utils.world_size, rank=Utils.rank, init_method=init_method)
             torch.distributed.barrier()
-
-        Utils.rank = torch.distributed.get_rank()
 
     @staticmethod
     def set_world_size(world_size=None, rank=None):
