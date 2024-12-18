@@ -209,6 +209,16 @@ class ProcessGroup:
         self.backend_type_to_backend.clear()
         self.store = None
 
+    def send(self, tensors: List[Tensor], dstRank: int, tag: int):
+        tensor = tensors[0]
+        _, handle = inner_comm_isend_op(tensor, dstRank, self._name, tag)
+        return handle
+
+    def recv(self, tensors: List[Tensor], srcRank: int, tag: int):
+        tensor = tensors[0]
+        tensor, handle = inner_comm_all_reduce_op(tag, srcRank, tensor.shape, self._name, tensor.dtype)
+        return handle
+
 
 class WorkRegistry:
     def __init__(self):

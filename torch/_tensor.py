@@ -25,7 +25,7 @@ StubTensor.nelement = numel
 StubTensor.__hash__ = Tensor.__hash__
 
 def _repeat(self, *sizes):
-    return ops.tile(self, tuple(sizes))
+    return ops.tile(self, tuple(*sizes))
 
 Tensor.repeat = _repeat
 StubTensor.repeat = _repeat
@@ -71,7 +71,7 @@ StubTensor.__or__ = __or__
 Tensor.device = 'NO_INFO'
 StubTensor.device = 'NO_INFO'
 
-def sum(self, dim=-1):
+def sum(self, dim=None):
     return ops.sum(self, dim)
 
 Tensor.sum = sum
@@ -126,3 +126,10 @@ def bfloat16(self):
 if not check_valid_version('2.4.1'):
     Tensor.bfloat16 = bfloat16
     StubTensor.bfloat16 = bfloat16
+
+def fill_(self, value):
+    output = self.fill(value)
+    self.assign_value(output)
+
+Tensor.fill_ = fill_
+StubTensor.fill_ = fill_

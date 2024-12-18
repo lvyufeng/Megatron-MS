@@ -1,3 +1,4 @@
+import mindspore
 from mindspore import Tensor
 from mindspore import get_rng_state, set_rng_state, manual_seed
 from mindspore.hal import device_count
@@ -11,3 +12,6 @@ def current_device():
 
 def is_available():
     return True
+
+def synchronize():
+    mindspore.hal.synchronize()
