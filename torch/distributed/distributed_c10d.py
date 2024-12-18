@@ -409,7 +409,7 @@ class BackendConfig:
         return self.device_backend_map
 
 
-class P2POp:
+class P2POp(mindspore.mint.distributed.P2POp):
     """
     A class to build point-to-point operations for ``batch_isend_irecv``.
 
